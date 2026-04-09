@@ -1,0 +1,17 @@
+Exemple : examples/smb_get_file.sh
+Priorité : moyenne
+Dépend de : smb2_create.todo, smb2_read.todo, smb2_close.todo
+
+Script de téléchargement de fichier distant via SMB2.
+
+Comportement attendu :
+    ./examples/smb_get_file.sh <ip> <domaine> <user> <pass> <share> <remote_path> [local_dest]
+
+Étapes :
+    1. smb::session::connect + negotiate + login
+    2. smb::session::tree_connect sur <share>
+    3. smb2::create (open, READ access, FILE_OPEN)
+    4. Boucle smb2::read jusqu'à DataRemaining == 0
+    5. smb2::close + tree_disconnect + logoff
+
+Sortie : écriture du fichier en local (hex → binaire via printf ou xxd)

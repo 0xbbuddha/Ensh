@@ -1,0 +1,22 @@
+Exemple : examples/smb_enum_users.sh
+Priorité : haute
+Dépend de : msrpc_samr.todo
+
+Énumération des utilisateurs locaux/domaine via SAMR sur SMB2.
+
+Comportement attendu :
+    ./examples/smb_enum_users.sh <ip> <domaine> <user> <pass>
+
+Étapes :
+    1. smb::session::connect + negotiate + login
+    2. tree_connect IPC$
+    3. smb2::create (named pipe \samr)
+    4. dcerpc::bind (SAMR interface)
+    5. samr::connect → samr::open_domain → samr::enum_users
+    6. Affichage : username, RID, flags
+
+Sortie exemple :
+    [+] Utilisateurs domaine CORP :
+        Administrator   RID:500  [enabled]
+        john.doe        RID:1104 [enabled]
+        krbtgt          RID:502  [disabled]

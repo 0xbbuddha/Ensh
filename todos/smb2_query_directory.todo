@@ -1,0 +1,17 @@
+Module : lib/protocol/smb/smb2/query_directory.sh
+Priorité : haute
+Dépend de : smb2_create.todo
+
+SMB2 QUERY_DIRECTORY (commande 0x000F)
+Liste le contenu d'un répertoire ouvert via SMB2 CREATE.
+
+À implémenter :
+- smb2::query_directory::build_request <var_out> <file_id_hex32> <pattern>
+                                        <msg_id> <session_id> <tree_id>
+    FileInformationClass : FileIdFullDirectoryInformation (0x26)
+    Flags : SMB2_RESTART_SCANS (0x01) pour le premier appel
+- smb2::query_directory::parse_response <hex_msg> <var_dict_out>
+    Parser les entrées FileIdFullDirectoryInformation (nom, taille, attributs, FileId)
+- Boucle sur STATUS_NO_MORE_FILES (0x80000006)
+
+Référence : MS-SMB2 §2.2.33 / §2.2.34

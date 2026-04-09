@@ -1,0 +1,20 @@
+Module : lib/transport/udp.sh (amélioration) + lib/protocol/dns/query.sh
+Priorité : basse
+
+Résolution DNS pure Bash
+Eviter la dépendance à host/dig/nslookup dans les exemples.
+
+À implémenter :
+- dns::query::build <var_out> <fqdn> <type_str>
+    type_str : A, AAAA, PTR, SRV, MX...
+    Format DNS wire : Header(12B) + Question section
+- dns::query::send_udp <var_out> <server_ip> <fqdn> <type_str>
+    UDP port 53 via /dev/udp
+    Fallback TCP si réponse tronquée (TC bit set)
+- dns::query::parse_response <hex_data> <var_dict_out>
+    Extraire : Answer records (RDATA selon type)
+
+Utilisation :
+    dns::query::send_udp ip 8.8.8.8 "dc01.corp.local" "A"
+
+Référence : RFC 1035

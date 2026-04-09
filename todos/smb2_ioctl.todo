@@ -1,0 +1,21 @@
+Module : lib/protocol/smb/smb2/ioctl.sh
+Priorité : haute
+Dépend de : smb2_create.todo
+
+SMB2 IOCTL (commande 0x000B)
+Transport DCE/RPC via named pipe IPC$.
+C'est la porte d'entrée vers SAMR, LSARPC, SRVSVC, etc.
+
+À implémenter :
+- smb2::ioctl::build_request <var_out> <ctl_code> <file_id_hex32> <input_hex>
+                              <msg_id> <session_id> <tree_id>
+    CtlCode principal : FSCTL_PIPE_TRANSCEIVE = 0x0011C017
+- smb2::ioctl::parse_response <hex_msg> <var_dict_out>
+    Extraire : OutputOffset, OutputCount, output_data (hex)
+
+Utilisation :
+    smb::session::tree_connect sess "IPC$" tid
+    smb2::create (pipe "\srvsvc" ou "\samr")
+    smb2::ioctl FSCTL_PIPE_TRANSCEIVE → envoyer/recevoir du DCE/RPC
+
+Référence : MS-SMB2 §2.2.31 / §2.2.32

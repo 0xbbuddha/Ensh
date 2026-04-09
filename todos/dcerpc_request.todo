@@ -1,0 +1,15 @@
+Module : lib/protocol/dcerpc/request.sh
+Priorité : haute
+Dépend de : dcerpc_bind.todo
+
+DCE/RPC REQUEST / RESPONSE
+Envoie un appel RPC et récupère la réponse.
+
+À implémenter :
+- dcerpc::request::build <var_out> <call_id> <opnum> <stub_hex>
+    PDU : PacketType=REQUEST(0), AllocHint, ContextId=0, OpNum, stub data
+- dcerpc::request::parse_response <hex_data> <var_dict_out>
+    Vérifier PacketType=RESPONSE(2), extraire stub payload
+- Gestion des PDU fragmentés (FirstFrag / LastFrag flags)
+
+Référence : [MS-RPCE] §2.2.2.7

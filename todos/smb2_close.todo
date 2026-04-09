@@ -1,0 +1,12 @@
+Module : lib/protocol/smb/smb2/close.sh
+Priorité : haute
+Dépend de : smb2_create.todo
+
+SMB2 CLOSE (commande 0x0006)
+Ferme un FileId ouvert par SMB2 CREATE.
+
+À implémenter :
+- smb2::close::build_request <var_out> <file_id_hex32> <msg_id> <session_id> <tree_id>
+- smb2::close::parse_response <hex_msg> <var_dict_out>
+
+Référence : MS-SMB2 §2.2.15 / §2.2.16

@@ -1,0 +1,19 @@
+Module : lib/protocol/smb/smb2/signing.sh
+Priorité : moyenne
+Dépend de : crypto_hmac_sha256.todo, crypto_aes_cmac.todo
+
+SMB2 Message Signing
+Signe les messages SMB2 avec la clé de session dérivée lors de l'auth NTLM.
+
+À implémenter :
+- smb2::signing::sign <msg_hex> <session_key_hex> <dialect_int> <var_out>
+    Dialecte < 0x0300 → HMAC-SHA256(SessionKey, message)
+    Dialecte ≥ 0x0300 → AES-CMAC(SigningKey, message)
+    Écrire la signature (16 octets) au offset 48 du header SMB2
+- smb2::signing::verify <msg_hex> <session_key_hex> <dialect_int> → retcode
+
+Prérequis coté session :
+    Récupérer ExportedSessionKey depuis NTLM Authenticate (MS-NLMP §3.4)
+    → nécessite KEY_EXCH + MasterKey (voir ntlm_authenticate.sh)
+
+Référence : MS-SMB2 §3.2.4.1.1

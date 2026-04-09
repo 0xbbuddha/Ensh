@@ -1,0 +1,14 @@
+Module : lib/protocol/smb/smb2/write.sh
+Priorité : moyenne
+Dépend de : smb2_create.todo
+
+SMB2 WRITE (commande 0x0009)
+Écrit des données dans un fichier via son FileId.
+
+À implémenter :
+- smb2::write::build_request <var_out> <file_id_hex32> <offset_int> <data_hex>
+                              <msg_id> <session_id> <tree_id>
+- smb2::write::parse_response <hex_msg> <var_dict_out>
+    Extraire : Count (octets écrits)
+
+Référence : MS-SMB2 §2.2.21 / §2.2.22
