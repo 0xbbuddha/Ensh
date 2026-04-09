@@ -1,0 +1,19 @@
+# Fichiers temporaires de tests
+tests/tmp/
+*.tmp
+
+# Captures réseau de debug
+*.pcap
+*.pcapng
+
+# Traces de session
+*.trace
+
+# Éditeurs
+.vscode/
+.idea/
+*.swp
+*~
+
+# macOS
+.DS_Store
