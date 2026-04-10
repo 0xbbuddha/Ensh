@@ -103,7 +103,7 @@ smb2::tree_connect::parse_response() {
     _smb2_tc_pr_dict[tree_id]="${_hdr[tree_id]}"
 
     if (( _hdr[status] != SMB2_STATUS_SUCCESS )); then
-        log::debug "smb2::tree_connect : status=0x$(printf '%08X' ${_hdr[status]})"
+        log::error "smb2::tree_connect : status=0x$(printf '%08X' ${_hdr[status]})"
         return 1
     fi
 

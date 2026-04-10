@@ -98,9 +98,7 @@ ntlm::flags::default_negotiate() {
     (( f |= NTLM_FL_EXTENDED_SESS_SEC ))
     (( f |= NTLM_FL_VERSION ))      # signale la présence du champ Version
     (( f |= NTLM_FL_128BIT ))
-    # KEY_EXCH intentionnellement absent : on n'envoie pas de session key chiffrée.
-    # Conséquence : EncryptedRandomSessionKey DOIT avoir Len=0 dans l'Authenticate.
-    # La signature de session ne sera pas disponible, mais l'auth réussit.
+    (( f |= NTLM_FL_KEY_EXCH ))  # requis pour exporter la session key (SMB signing)
     (( f |= NTLM_FL_56BIT ))
     ntlm::flags::to_le32 "${f}" "$1"
 }

@@ -52,6 +52,8 @@ ensh::import protocol/smb/smb2/header
 ensh::import protocol/smb/smb2/negotiate
 ensh::import protocol/smb/smb2/session_setup
 ensh::import protocol/smb/smb2/tree_connect
+ensh::import protocol/smb/smb2/ioctl
+ensh::import protocol/smb/smb2/signing
 
 # ── Registre de sessions ──────────────────────────────────────────────────────
 
@@ -62,15 +64,29 @@ declare -gA _SMB_VERSION=()
 declare -gA _SMB_PID=()
 declare -gA _SMB_SESSION_KEY=()
 declare -gA _SMB_EXT_SEC=()
-declare -gA _SMB_UID=()         # SMB1 User ID
-declare -gA _SMB_MSG_ID=()      # SMB2 MessageId counter
-declare -gA _SMB_SESSION_ID=()  # SMB2 SessionId (hex 16 nibbles LE)
+declare -gA _SMB_UID=()              # SMB1 User ID
+declare -gA _SMB_MSG_ID=()           # SMB2 MessageId counter
+declare -gA _SMB_TREE_IPC=()         # TreeId du partage IPC$ (SMB2)
+declare -gA _SMB_SESSION_ID=()       # SMB2 SessionId (hex 16 nibbles LE)
+declare -gA _SMB_DIALECT=()          # dialecte SMB2 négocié (entier)
+declare -gA _SMB_SIGNING_KEY=()      # clé de signature SMB2 dérivée
+declare -gA _SMB_SIGNING_ENABLED=()  # "1" si signature active
 
 # ── Primitives réseau ─────────────────────────────────────────────────────────
 
 # smb::_send <session> <hex_data>
+# Signe automatiquement si la signature est activée sur la session.
 smb::_send() {
-    tcp::send "${_SMB_TCP[$1]}" "${2^^}"
+    local _sess="$1"
+    local _data="${2^^}"
+
+    if [[ "${_SMB_SIGNING_ENABLED[${_sess}]:-0}" == "1" ]]; then
+        smb2::signing::sign_nbt _data \
+            "${_SMB_SIGNING_KEY[${_sess}]}" \
+            "${_SMB_DIALECT[${_sess}]:-0x0302}" || return 1
+    fi
+
+    tcp::send "${_SMB_TCP[${_sess}]}" "${_data}"
 }
 
 # smb::_recv <session> <var_out> [timeout]
@@ -145,10 +161,11 @@ smb::session::disconnect() {
 
     tcp::close "${_handle}" 2>/dev/null || true
 
-    unset "_SMB_TCP[${_sess}]"   "_SMB_HOST[${_sess}]"    "_SMB_PORT[${_sess}]"
-    unset "_SMB_VERSION[${_sess}]" "_SMB_PID[${_sess}]"  "_SMB_SESSION_KEY[${_sess}]"
-    unset "_SMB_EXT_SEC[${_sess}]" "_SMB_UID[${_sess}]"  "_SMB_MSG_ID[${_sess}]"
-    unset "_SMB_SESSION_ID[${_sess}]"
+    unset "_SMB_TCP[${_sess}]"    "_SMB_HOST[${_sess}]"           "_SMB_PORT[${_sess}]"
+    unset "_SMB_VERSION[${_sess}]" "_SMB_PID[${_sess}]"          "_SMB_SESSION_KEY[${_sess}]"
+    unset "_SMB_EXT_SEC[${_sess}]" "_SMB_UID[${_sess}]"          "_SMB_MSG_ID[${_sess}]"
+    unset "_SMB_SESSION_ID[${_sess}]" "_SMB_TREE_IPC[${_sess}]"  "_SMB_DIALECT[${_sess}]"
+    unset "_SMB_SIGNING_KEY[${_sess}]" "_SMB_SIGNING_ENABLED[${_sess}]"
     log::debug "smb : session fermée"
 }
 
@@ -182,7 +199,9 @@ smb::session::negotiate() {
 
             local -A _neg2
             smb2::negotiate::parse_response "${_resp}" _neg2 || return 1
+            _SMB_DIALECT["${_sess}"]="${_neg2[dialect]}"
             log::info "smb : SMB2 négocié — dialecte=0x$(printf '%04X' ${_neg2[dialect]}) caps=0x$(printf '%08X' ${_neg2[capabilities]})"
+            log::debug "smb2 : negotiate security_mode=0x$(printf '%04X' ${_neg2[security_mode]:-0}) (0x0001=signing_enabled, 0x0002=signing_required)"
             return 0
         fi
     fi
@@ -299,11 +318,15 @@ _smb2_login() {
 
     # ── SessionSetup #2 : NTLM Authenticate ─────────────────────────────────
     local _ntlm_auth _spnego_auth _msg_id2 _req2
+    log::debug "smb2::login : challenge flags = ${_chall[flags]}"
+    local _exported_session_key=""
     ntlm::authenticate::build _ntlm_auth \
         "${_user}" "${_domain}" "ENSH" \
         "${_nt_hash}" \
         "${_chall[server_challenge]}" \
-        "${_chall[target_info]}"
+        "${_chall[target_info]}" \
+        "${_chall[flags]}" "" "" \
+        _exported_session_key
 
     spnego::ntlm_auth "${_ntlm_auth}" _spnego_auth
 
@@ -334,8 +357,50 @@ _smb2_login() {
     local _final_sid="${_ss2[session_id]}"
     [[ "${_final_sid}" != "0000000000000000" ]] && _SMB_SESSION_ID["${_sess}"]="${_final_sid}"
 
+    # Inspecter les SessionFlags : guest (0x01), null (0x02), chiffrement requis (0x04)
+    local -i _sflags="${_ss2[session_flags]:-0}"
     local _guest=""
-    (( (_ss2[session_flags] & 0x0001) != 0 )) && _guest=" [GUEST]"
+    (( _sflags & 0x0001 )) && _guest=" [GUEST]"
+    log::info "smb2 : session_flags=0x$(printf '%04X' ${_sflags}) session_id=${_SMB_SESSION_ID[${_sess}]}"
+    if (( _sflags & 0x0004 )); then
+        log::warn "smb2 : le serveur exige le chiffrement SMB2 — non implémenté, TREE_CONNECT échouera"
+    fi
+
+    # ── Activation du signing SMB2 ────────────────────────────────────────────
+    # Dériver la SigningKey depuis l'ExportedSessionKey NTLM
+    if [[ -n "${_exported_session_key}" ]]; then
+        log::info "smb2 : ExportedSessionKey=${_exported_session_key}"
+        log::info "smb2 : SessionId KDF     =${_SMB_SESSION_ID[${_sess}]}"
+
+        local _signing_key
+        smb2::signing::derive_key _signing_key \
+            "${_exported_session_key}" \
+            "${_SMB_DIALECT[${_sess}]:-0x0302}" \
+            "${_SMB_SESSION_ID[${_sess}]}" || true
+
+        if [[ -n "${_signing_key}" ]]; then
+            _SMB_SIGNING_KEY["${_sess}"]="${_signing_key}"
+            _SMB_SIGNING_ENABLED["${_sess}"]="1"
+            log::info "smb2 : signing activé (dialecte=0x$(printf '%04X' ${_SMB_DIALECT[${_sess}]:-0}) clé=${_signing_key})"
+
+            # ── Vérification de la réponse serveur ─────────────────────────────
+            # La réponse SESSION_SETUP finale est signée par le serveur (SMB 3.x).
+            # Si notre clé est correcte, smb2::signing::verify doit passer.
+            local -i _ss2_smb_flags; endian::read_le32 "${_resp2}" 16 _ss2_smb_flags
+            if (( _ss2_smb_flags & SMB2_FLAGS_SIGNED )); then
+                if smb2::signing::verify "${_resp2}" "${_signing_key}" "${_SMB_DIALECT[${_sess}]:-0x0302}"; then
+                    log::info "smb2 : ✓ signature serveur SESSION_SETUP vérifiée — clé correcte"
+                else
+                    log::warn "smb2 : ✗ signature serveur SESSION_SETUP INVALIDE — clé de signing incorrecte !"
+                fi
+            else
+                log::info "smb2 : réponse SESSION_SETUP non signée par le serveur (SMB2_FLAGS_SIGNED absent)"
+            fi
+        fi
+    else
+        log::warn "smb2 : ExportedSessionKey vide — KEY_EXCH absent ou RC4 échoué, signing désactivé"
+    fi
+
     log::info "smb2 : authentifié en tant que ${_domain}\\${_user}${_guest}"
 }
 
@@ -479,6 +544,117 @@ smb::session::tree_disconnect() {
     fi
 
     log::debug "smb : tree disconnect tid=${_tid}"
+}
+
+# ── Utilitaires SMB2 : named pipes ───────────────────────────────────────────
+
+# smb::session::open_pipe <session> <pipe_name> <var_file_id_out>
+#
+# Ouvre un named pipe sur IPC$ via SMB2 CREATE.
+# <pipe_name> : ex "\srvsvc", "\samr", "\lsarpc"
+# <var_file_id_out> : reçoit le FileId (32 nibbles hex = Persistent(8B) + Volatile(8B))
+#
+# Connecte automatiquement IPC$ si pas encore fait.
+smb::session::open_pipe() {
+    local _sess="$1"
+    local _pipe="$2"
+    local -n _smb_op_fid="$3"
+
+    [[ "${_SMB_VERSION[${_sess}]}" != "2" ]] && {
+        log::error "smb::session::open_pipe : SMB2 requis"
+        return 1
+    }
+
+    # Connecter IPC$ si pas encore fait
+    if [[ -z "${_SMB_TREE_IPC[${_sess}]:-}" ]]; then
+        log::debug "smb::session::open_pipe : connexion à IPC\$..."
+        local _ipc_tid
+        if ! smb::session::tree_connect "${_sess}" "IPC\$" _ipc_tid; then
+            log::error "smb::session::open_pipe : impossible de se connecter à IPC\$"
+            return 1
+        fi
+        _SMB_TREE_IPC["${_sess}"]="${_ipc_tid}"
+        log::debug "smb::session::open_pipe : IPC\$ tid=${_ipc_tid}"
+    fi
+
+    local -i _tid="${_SMB_TREE_IPC[${_sess}]}"
+    local _sid="${_SMB_SESSION_ID[${_sess}]}"
+
+    # SMB2 CREATE — ouvrir le named pipe
+    # DesiredAccess : 0x001F01FF (GENERIC_ALL)
+    # FileAttributes : 0 (pipe, pas de fichier)
+    # ShareAccess : 3 (READ|WRITE)
+    # CreateDisposition : OPEN_EXISTING = 1
+    # CreateOptions : 0x00000040 (FILE_NON_DIRECTORY_FILE)
+    # NameOffset : 64 + 56 (header + corps fixe) = 120
+    local _msg_id; smb2::_next_msg_id "${_sess}" _msg_id
+
+    local _pipe_utf16; utf16::encode_le "${_pipe}" _pipe_utf16
+    local -i _name_len=$(( ${#_pipe_utf16} / 2 ))
+    local _name_off_le _name_len_le; endian::le16 120 _name_off_le; endian::le16 "${_name_len}" _name_len_le
+
+    local _hdr; smb2::header::build _hdr "${SMB2_CMD_CREATE}" "${_msg_id}" "${_sid}" "${_tid}" 0 0 1 1
+
+    local _body="3900"          # StructureSize = 57
+    _body+="00"                  # SecurityFlags = 0
+    _body+="00"                  # RequestedOplockLevel = 0 (NONE)
+    _body+="00000000"            # ImpersonationLevel = 0 (Anonymous)
+    _body+="0000000000000000"    # SmbCreateFlags = 0
+    _body+="0000000000000000"    # Reserved
+    _body+="FF011F00"            # DesiredAccess = 0x001F01FF (LE)
+    _body+="00000000"            # FileAttributes = 0
+    _body+="03000000"            # ShareAccess = READ|WRITE
+    _body+="01000000"            # CreateDisposition = OPEN_EXISTING
+    _body+="40000000"            # CreateOptions = FILE_NON_DIRECTORY_FILE
+    _body+="${_name_off_le}"     # NameOffset
+    _body+="${_name_len_le}"     # NameLength
+    _body+="00000000"            # CreateContextsOffset = 0
+    _body+="00000000"            # CreateContextsLength = 0
+    _body+="${_pipe_utf16}"      # FileName (UTF-16LE)
+
+    local _smb="${_hdr}${_body}"; local _req; smb2::nbt_wrap "${_smb}" _req
+    smb::_send "${_sess}" "${_req}" || return 1
+
+    local _resp; smb::_recv "${_sess}" _resp 15 || return 1
+
+    # Parse CREATE response
+    local -A _cr_hdr; smb2::header::parse "${_resp}" _cr_hdr || return 1
+    if (( _cr_hdr[status] != SMB2_STATUS_SUCCESS )); then
+        log::error "smb::session::open_pipe : CREATE échoué status=0x$(printf '%08X' ${_cr_hdr[status]})"
+        return 1
+    fi
+
+    # FileId : bytes 132-163 (offset 66 dans le corps = 64+66 = 130 octets = 260 nibbles)
+    # Corps CREATE response : StructureSize(2) + OplockLevel(1) + Flags(1) + CreateAction(4)
+    #   + CreationTime(8) + LastAccessTime(8) + LastWriteTime(8) + ChangeTime(8)
+    #   + AllocationSize(8) + EndofFile(8) + FileAttributes(4) + Reserved2(4)
+    #   + FileId(16) ...
+    # Offset FileId = 64(header) + 2+1+1+4+8+8+8+8+8+8+4+4 = 64+64 = 128 octets = 256 nibbles
+    hex::slice "${_resp}" 128 16 _smb_op_fid
+    log::info "smb : pipe '${_pipe}' ouvert FileId=${_smb_op_fid:0:16}..."
+}
+
+# smb::session::close_pipe <session> <file_id_hex32>
+#
+# Ferme un named pipe ouvert via SMB2 CLOSE.
+smb::session::close_pipe() {
+    local _sess="$1"
+    local _fid="$2"
+    local -i _tid="${_SMB_TREE_IPC[${_sess}]:-0}"
+    local _sid="${_SMB_SESSION_ID[${_sess}]}"
+
+    local _msg_id; smb2::_next_msg_id "${_sess}" _msg_id
+    local _hdr; smb2::header::build _hdr "${SMB2_CMD_CLOSE}" "${_msg_id}" "${_sid}" "${_tid}" 0 0 1 1
+
+    local _body="1800"     # StructureSize = 24
+    _body+="0000"          # Flags = 0
+    _body+="00000000"      # Reserved
+    _body+="${_fid}"       # FileId (16 octets)
+
+    local _smb="${_hdr}${_body}"; local _req; smb2::nbt_wrap "${_smb}" _req
+    smb::_send "${_sess}" "${_req}" || true
+    local _resp; smb::_recv "${_sess}" _resp 5 || true
+    log::debug "smb : pipe fermé"
 }
 
 # ── Utilitaire : try_share ────────────────────────────────────────────────────

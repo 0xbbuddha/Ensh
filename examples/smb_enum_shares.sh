@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 #
-# examples/smb_enum_shares.sh — Énumération de partages SMB1 via Ensh
+# examples/smb_enum_shares.sh — Énumération de partages SMB via Ensh
+#
+# Détecte les partages réels du serveur via SRVSVC / NetrShareEnum (DCE/RPC),
+# sans liste prédéfinie. Fonctionne sur SMB2 uniquement.
 #
 # Usage :
 #   bash examples/smb_enum_shares.sh [options] <host> <domain> <user> <password>
@@ -8,12 +11,10 @@
 # Options :
 #   -p, --port <port>  Port SMB (défaut : 445)
 #   -t, --timeout <s>  Timeout réseau en secondes (défaut : 10)
-#   -s, --shares <lst> Liste de partages à tester, séparés par des virgules
-#                      (défaut : liste prédéfinie de partages communs)
 #
 # Exemples :
 #   bash examples/smb_enum_shares.sh 10.10.10.1 corp.local administrator 'P@ssw0rd'
-#   bash examples/smb_enum_shares.sh --shares "C$,ADMIN$,IPC$,sysvol" 10.10.10.1 corp admin pw
+#   bash examples/smb_enum_shares.sh -p 445 -t 15 10.10.10.1 corp admin pw
 #
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -23,19 +24,18 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/../ensh.sh"
 
 ensh::import protocol/smb/session
+ensh::import protocol/msrpc/srvsvc
 
 # ── Parsing des arguments ─────────────────────────────────────────────────────
 
 PORT=445
 TIMEOUT=10
-CUSTOM_SHARES=""
 
 _args=()
 while (( $# > 0 )); do
     case "$1" in
-        -p|--port)    PORT="$2";   shift 2 ;;
+        -p|--port)    PORT="$2";    shift 2 ;;
         -t|--timeout) TIMEOUT="$2"; shift 2 ;;
-        -s|--shares)  CUSTOM_SHARES="$2"; shift 2 ;;
         *) _args+=("$1"); shift ;;
     esac
 done
@@ -50,46 +50,18 @@ if [[ -z "${HOST}" || -z "${DOMAIN}" || -z "${USER}" || -z "${PASS}" ]]; then
     printf '\nOptions :\n'  >&2
     printf '  -p <port>    Port SMB (défaut : 445)\n' >&2
     printf '  -t <sec>     Timeout en secondes\n' >&2
-    printf '  -s <shares>  Liste de partages (ex: "C$,ADMIN$,IPC$")\n' >&2
     exit 1
-fi
-
-# ── Partages à tester ─────────────────────────────────────────────────────────
-
-if [[ -n "${CUSTOM_SHARES}" ]]; then
-    IFS=',' read -ra SHARES <<< "${CUSTOM_SHARES}"
-else
-    # Liste typique pour un AD Windows
-    SHARES=(
-        "IPC$"
-        "C$"
-        "ADMIN$"
-        "SYSVOL"
-        "NETLOGON"
-        "print$"
-        "Users"
-        "Shares"
-        "Data"
-        "Backup"
-        "Public"
-        "Transfer"
-        "IT"
-        "Finance"
-        "HR"
-    )
 fi
 
 # ── Helpers affichage ─────────────────────────────────────────────────────────
 
 _banner() {
     printf '\n%s\n' "════════════════════════════════════════════════"
-    printf  ' Ensh — Énumération SMB1 / Partages réseaux\n'
+    printf  ' Ensh — Énumération SMB / Partages réseaux\n'
     printf  '%s\n' "════════════════════════════════════════════════"
-    printf  '  Cible   : %s\n'   "${HOST}"
-    printf  '  Port    : %s\n'   "${PORT}"
-    printf  '  Domaine : %s\n'   "${DOMAIN}"
+    printf  '  Cible   : %s:%s\n' "${HOST}" "${PORT}"
+    printf  '  Domaine : %s\n'    "${DOMAIN}"
     printf  '  Compte  : %s\\%s\n' "${DOMAIN}" "${USER}"
-    printf  '  Partages: %d à tester\n' "${#SHARES[@]}"
     printf  '\n'
 }
 
@@ -97,6 +69,22 @@ _ok()   { printf ' \033[32m[+]\033[0m %s\n' "$*"; }
 _err()  { printf ' \033[31m[✗]\033[0m %s\n' "$*" >&2; }
 _info() { printf ' \033[34m[*]\033[0m %s\n' "$*"; }
 _warn() { printf ' \033[33m[!]\033[0m %s\n' "$*"; }
+
+_share_type_str() {
+    local -i t="$1"
+    local base=$(( t & 0x0FFFFFFF ))
+    local special=$(( t & 0x80000000 ))
+    local label
+    case "${base}" in
+        0) label="Disk" ;;
+        1) label="Print" ;;
+        2) label="Device" ;;
+        3) label="IPC" ;;
+        *) label="?(${base})" ;;
+    esac
+    (( special )) && label+=" [caché]"
+    printf '%s' "${label}"
+}
 
 _banner
 
@@ -112,11 +100,17 @@ _ok "Connecté."
 
 _info "Négociation SMB..."
 if ! smb::session::negotiate "${sess}"; then
-    _err "Négociation SMB échouée — serveur incompatible ?"
+    _err "Négociation SMB échouée"
     smb::session::disconnect "${sess}"
     exit 1
 fi
-_ok "Négociation OK."
+
+if [[ "${_SMB_VERSION[${sess}]}" != "2" ]]; then
+    _err "Ce script requiert SMB2 (serveur SMB1 détecté)"
+    smb::session::disconnect "${sess}"
+    exit 1
+fi
+_ok "SMB2 négocié."
 
 # ── Authentification ──────────────────────────────────────────────────────────
 
@@ -128,62 +122,74 @@ if ! smb::session::login "${sess}" "${USER}" "${DOMAIN}" "${PASS}"; then
 fi
 _ok "Authentifié.\n"
 
-# ── Énumération des partages ──────────────────────────────────────────────────
+# ── Énumération via SRVSVC ────────────────────────────────────────────────────
 
-printf ' %-25s  %s\n' "PARTAGE" "STATUT"
-printf ' %s\n' "─────────────────────────────────────────────"
+_info "Ouverture du pipe \\\\srvsvc sur IPC\$..."
+declare file_id
+if ! smb::session::open_pipe "${sess}" "\\srvsvc" file_id; then
+    _err "Impossible d'ouvrir le pipe \\srvsvc — accès refusé ?"
+    smb::session::disconnect "${sess}"
+    exit 1
+fi
+_ok "Pipe ouvert."
 
-declare -a accessible=()
-declare -a denied=()
-declare -a not_found=()
+_info "DCE/RPC BIND (SRVSVC)..."
+if ! srvsvc::bind "${sess}" "${file_id}"; then
+    _err "BIND SRVSVC échoué"
+    smb::session::close_pipe "${sess}" "${file_id}"
+    smb::session::disconnect "${sess}"
+    exit 1
+fi
+_ok "BIND OK.\n"
 
-for share in "${SHARES[@]}"; do
-    declare result
-    smb::session::try_share "${sess}" "${share}" result
+_info "NetrShareEnum en cours..."
+declare -a shares=()
+if ! srvsvc::net_share_enum "${sess}" "${file_id}" "${HOST}" shares; then
+    _err "NetrShareEnum échoué"
+    smb::session::close_pipe "${sess}" "${file_id}"
+    smb::session::disconnect "${sess}"
+    exit 1
+fi
 
-    case "${result}" in
-        "OK")
-            printf ' \033[32m%-25s  ✓ ACCESSIBLE\033[0m\n' "${share}"
-            accessible+=("${share}")
-            ;;
-        "ACCESS_DENIED")
-            printf ' \033[33m%-25s  ✗ Accès refusé\033[0m\n' "${share}"
-            denied+=("${share}")
-            ;;
-        "NOT_FOUND")
-            printf ' \033[90m%-25s  — Inexistant\033[0m\n' "${share}"
-            not_found+=("${share}")
-            ;;
-        *)
-            printf ' \033[31m%-25s  ! %s\033[0m\n' "${share}" "${result}"
-            ;;
+# ── Affichage des résultats ───────────────────────────────────────────────────
+
+local -i total="${#shares[@]}"
+printf ' %-25s  %-12s  %s\n' "PARTAGE" "TYPE" "COMMENTAIRE"
+printf ' %s\n' "─────────────────────────────────────────────────────────"
+
+declare -a disk_shares=()
+declare -a ipc_shares=()
+declare -a other_shares=()
+
+for entry in "${shares[@]}"; do
+    IFS=':' read -r name type_int comment <<< "${entry}"
+    local type_str; type_str="$(_share_type_str "${type_int}")"
+    local base_type=$(( type_int & 0x0FFFFFFF ))
+
+    printf ' \033[32m%-25s\033[0m  %-12s  %s\n' "${name}" "${type_str}" "${comment}"
+
+    case "${base_type}" in
+        0) disk_shares+=("${name}") ;;
+        3) ipc_shares+=("${name}") ;;
+        *) other_shares+=("${name}") ;;
     esac
 done
 
 # ── Résumé ────────────────────────────────────────────────────────────────────
 
-printf '\n %s\n' "─────────────────────────────────────────────"
-printf ' Résumé : %d accessible(s), %d refusé(s), %d inexistant(s)\n' \
-    "${#accessible[@]}" "${#denied[@]}" "${#not_found[@]}"
+printf '\n %s\n' "─────────────────────────────────────────────────────────"
+printf ' %d partage(s) détecté(s) via NetrShareEnum\n' "${total}"
 
-if (( ${#accessible[@]} > 0 )); then
+if (( ${#disk_shares[@]} > 0 )); then
     printf '\n'
-    _ok "Partages accessibles :"
-    for s in "${accessible[@]}"; do
+    _ok "Partages disque :"
+    for s in "${disk_shares[@]}"; do
         printf '     \\\\%s\\%s\n' "${HOST}" "${s}"
     done
 fi
-
-if (( ${#denied[@]} > 0 )); then
-    printf '\n'
-    _warn "Partages existants mais accès refusé (utilisateur non admin) :"
-    for s in "${denied[@]}"; do
-        printf '     \\\\%s\\%s\n' "${HOST}" "${s}"
-    done
-fi
-
-printf '\n'
 
 # ── Nettoyage ─────────────────────────────────────────────────────────────────
 
+smb::session::close_pipe "${sess}" "${file_id}"
 smb::session::disconnect "${sess}"
+printf '\n'

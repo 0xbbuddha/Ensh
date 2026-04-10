@@ -73,9 +73,9 @@ ntlm::negotiate::build() {
     local -i domain_len=$(( ${#domain_hex} / 2 ))
     local -i workstation_len=$(( ${#workstation_hex} / 2 ))
 
-    # Le payload commence après le header fixe de 32 octets
-    # (avec version : 40 octets, mais on met Version à zéro)
-    local -i header_size=32
+    # Le payload commence après le header fixe de 40 octets
+    # (Signature 8 + MessageType 4 + NegotiateFlags 4 + DomainFields 8 + WorkstationFields 8 + Version 8)
+    local -i header_size=40
     local -i domain_offset="${header_size}"
     local -i workstation_offset=$(( header_size + domain_len ))
 

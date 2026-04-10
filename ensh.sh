@@ -79,18 +79,42 @@ ensh::import \
 # ── Mode "tout charger" ───────────────────────────────────────────────────────
 if [[ "${1:-}" == "--all" ]]; then
     ensh::import \
-        encoding/utf16   \
-        encoding/base64  \
-        encoding/asn1    \
-        crypto/md4       \
-        crypto/hmac_md5  \
-        crypto/rc4       \
-        crypto/nt_hash   \
-        crypto/lm_hash   \
-        transport/tcp    \
-        transport/udp    \
-        protocol/netbios/nbt  \
-        protocol/ntlm/negotiate   \
-        protocol/ntlm/challenge   \
-        protocol/ntlm/authenticate
+        encoding/utf16          \
+        encoding/base64         \
+        encoding/asn1           \
+        crypto/md4              \
+        crypto/hmac_md5         \
+        crypto/hmac_sha256      \
+        crypto/aes_cmac         \
+        crypto/rc4              \
+        crypto/nt_hash          \
+        crypto/lm_hash          \
+        transport/tcp           \
+        transport/udp           \
+        transport/tls           \
+        protocol/netbios/nbt          \
+        protocol/ntlm/flags           \
+        protocol/ntlm/negotiate       \
+        protocol/ntlm/challenge       \
+        protocol/ntlm/authenticate    \
+        protocol/smb/spnego           \
+        protocol/smb/smb1/header      \
+        protocol/smb/smb1/negotiate   \
+        protocol/smb/smb1/session_setup \
+        protocol/smb/smb1/tree_connect  \
+        protocol/smb/smb2/header        \
+        protocol/smb/smb2/negotiate     \
+        protocol/smb/smb2/session_setup \
+        protocol/smb/smb2/tree_connect  \
+        protocol/smb/smb2/ioctl         \
+        protocol/smb/smb2/signing       \
+        protocol/smb/session            \
+        protocol/dcerpc/bind            \
+        protocol/dcerpc/request         \
+        protocol/msrpc/srvsvc           \
+        protocol/ldap/message           \
+        protocol/ldap/filter            \
+        protocol/ldap/bind              \
+        protocol/ldap/search            \
+        protocol/ldap/session
 fi
