@@ -36,7 +36,9 @@ ensh::import core/endian
 ensh::import core/log
 ensh::import crypto/nt_hash
 ensh::import crypto/hmac_md5
+ensh::import crypto/rc4
 ensh::import encoding/utf16
+ensh::import protocol/ntlm/challenge
 ensh::import protocol/ntlm/flags
 
 readonly _NTLM_AUTH_SIG="4E544C4D53535000"
@@ -53,6 +55,11 @@ readonly _NTLM_AUTH_SIG="4E544C4D53535000"
 #   2. Client blob (NTLMv2ClientChallenge)
 #   3. NT-Proof-String = HMAC-MD5(ResponseKeyNT, ServerChallenge || Blob)
 #   4. NtChallengeResponse = NT-Proof-String || Blob
+# ntlm::auth::compute_ntv2_response <nt_hash_hex> <username> <domain>
+#                                   <server_challenge_hex> <client_challenge_hex>
+#                                   <target_info_hex> <timestamp_hex>
+#                                   <var_nt_proof_out> <var_blob_out>
+#                                   [var_response_key_nt_out]
 ntlm::auth::compute_ntv2_response() {
     local nt_hash="$1"
     local username="$2"
@@ -63,6 +70,7 @@ ntlm::auth::compute_ntv2_response() {
     local timestamp="${7:-}"
     local -n _ntlm_ntv2_proof="$8"
     local -n _ntlm_ntv2_blob="$9"
+    local _ntlm_ntv2_rknt_varname="${10:-}"
 
     # Si pas de timestamp, utiliser l'heure courante en FILETIME
     # FILETIME = nanosecondes depuis 01/01/1601, divisées par 100
@@ -70,7 +78,9 @@ ntlm::auth::compute_ntv2_response() {
     if [[ -z "${timestamp}" ]]; then
         local -i epoch_s; epoch_s="$(date +%s)"
         local -i filetime=$(( epoch_s * 10000000 + 116444736000000000 ))
-        endian::le64 0 "${filetime}" timestamp
+        local -i ft_hi=$(( filetime >> 32 ))
+        local -i ft_lo=$(( filetime & 0xFFFFFFFF ))
+        endian::le64 "${ft_hi}" "${ft_lo}" timestamp
     fi
 
     # ── ResponseKeyNT = HMAC-MD5(NT_hash, uppercase(username) || domain) en UTF-16LE
@@ -114,6 +124,12 @@ ntlm::auth::compute_ntv2_response() {
     hmac_md5::compute "${response_key_nt}" "${server_challenge}${blob}" _ntlm_ntv2_proof
 
     log::debug "ntlm::auth : NT-Proof-String = ${_ntlm_ntv2_proof}"
+
+    # Exporter ResponseKeyNT si demandé (nécessaire pour SessionBaseKey)
+    if [[ -n "${_ntlm_ntv2_rknt_varname}" ]]; then
+        local -n _ntlm_ntv2_rknt_out="${_ntlm_ntv2_rknt_varname}"
+        _ntlm_ntv2_rknt_out="${response_key_nt}"
+    fi
 }
 
 # ── Construction du message Authenticate ────────────────────────────────────
@@ -124,14 +140,15 @@ ntlm::auth::compute_ntv2_response() {
 #                           <server_challenge_hex>
 #                           <target_info_hex>
 #                           [flags_hex] [client_challenge_hex] [timestamp_hex]
+#                           [var_exported_session_key_out]
+#                           [negotiate_msg_hex] [challenge_msg_hex]
 #
 # Construit un message NTLM Authenticate (NTLMv2).
-#
-# Exemple :
-#   ntlm::authenticate::build msg \
-#       "Administrator" "CORP" "WORKSTATION" \
-#       "$(nt_hash::from_password 'Password'; ...)" \
-#       "${server_challenge}" "${target_info}"
+# Si NEGOTIATE_VERSION : champ Version (8 o) + MIC (16 o) après les flags ; MIC requis par MS-NLMP
+# lorsque TargetInfo est présent dans le Challenge (SMB domaine) :
+#   MIC = HMAC-MD5(SessionBaseKey, Type1 || Type2 || Type3_avec_MIC_à_zéro).
+# Les messages Type 1 et 2 bruts doivent être passés en args 12 et 13.
+# Si KEY_EXCH est actif dans les flags, calcule et inclut l'EncryptedRandomSessionKey.
 ntlm::authenticate::build() {
     local -n _ntlm_auth_out="$1"
     local username="$2"
@@ -143,6 +160,9 @@ ntlm::authenticate::build() {
     local flags_hex="${8:-}"
     local client_challenge="${9:-}"
     local timestamp="${10:-}"
+    local _ntlm_esk_varname="${11:-}"
+    local negotiate_hex="${12:-}"
+    local challenge_hex="${13:-}"
 
     # Flags par défaut
     if [[ -z "${flags_hex}" ]]; then
@@ -161,18 +181,80 @@ ntlm::authenticate::build() {
         fi
     fi
 
-    # Calculer la réponse NTLMv2
-    local nt_proof ntv2_blob
+    # MsvAvTargetName = cifs/<FQDN> : requis sur certains DC (validation SPN / NTLM)
+    # — cf. impacket ntlm.py (sinon ACCESS_DENIED SMB2 signé après auth réussie).
+    if [[ -n "${target_info}" ]]; then
+        local _ti_spn_fixed
+        ntlm::challenge::target_info_inject_cifs_spn "${target_info}" _ti_spn_fixed
+        target_info="${_ti_spn_fixed}"
+    fi
+
+    # Réutiliser l'horodatage du serveur si présent dans TargetInfo, comme impacket.
+    if [[ -z "${timestamp}" && -n "${target_info}" ]]; then
+        local -A _auth_ti
+        ntlm::challenge::parse_target_info "${target_info}" _auth_ti || true
+        if [[ -n "${_auth_ti[timestamp]:-}" ]]; then
+            timestamp="${_auth_ti[timestamp]}"
+        fi
+    fi
+
+    # Calculer la réponse NTLMv2 + récupérer ResponseKeyNT pour SessionBaseKey
+    local nt_proof ntv2_blob _response_key_nt
     ntlm::auth::compute_ntv2_response \
         "${nt_hash}" "${username}" "${domain}" \
         "${server_challenge}" "${client_challenge}" \
         "${target_info}" "${timestamp}" \
-        nt_proof ntv2_blob
+        nt_proof ntv2_blob _response_key_nt
 
     local nt_response="${nt_proof}${ntv2_blob}"
 
-    # LM response : pour NTLMv2 c'est client_challenge || 00*16
-    local lm_response="${client_challenge}0000000000000000"
+    # LMv2 response = HMAC(ResponseKeyNT, ServerChallenge || ClientChallenge) || ClientChallenge
+    local lm_v2_proof lm_response
+    hmac_md5::compute "${_response_key_nt}" "${server_challenge}${client_challenge}" lm_v2_proof
+    lm_response="${lm_v2_proof}${client_challenge}"
+
+    # SessionBaseKey = HMAC-MD5(ResponseKeyNT, NTProofStr) — MIC + KEY_EXCH (MS-NLMP §3.4.5.1)
+    local exported_session_key="" encrypted_session_key="" session_base_key=""
+    hmac_md5::compute "${_response_key_nt}" "${nt_proof}" session_base_key
+
+    local -i _has_key_exch=0
+    local _flags_int; ntlm::flags::from_le32 "${flags_hex}" _flags_int
+    (( _flags_int & NTLM_FL_KEY_EXCH )) && _has_key_exch=1
+
+    local -i _has_ver=0
+    (( _flags_int & NTLM_FL_VERSION )) && _has_ver=1
+
+    local -i _need_mic=0
+    if (( _has_ver )) && [[ -n "${target_info}" && -n "${negotiate_hex}" && -n "${challenge_hex}" ]]; then
+        _need_mic=1
+    fi
+
+    # ── KEY_EXCH : ExportedSessionKey + EncryptedRandomSessionKey ─
+    if (( _has_key_exch )); then
+
+        # Générer ExportedSessionKey aléatoire (16 octets)
+        if [[ -r /dev/urandom ]]; then
+            exported_session_key="$(dd if=/dev/urandom bs=16 count=1 2>/dev/null | xxd -p | tr -d '\n')"
+            exported_session_key="${exported_session_key^^:0:32}"
+        else
+            printf -v exported_session_key '%04X%04X%04X%04X%04X%04X%04X%04X' \
+                "${RANDOM}" "${RANDOM}" "${RANDOM}" "${RANDOM}" \
+                "${RANDOM}" "${RANDOM}" "${RANDOM}" "${RANDOM}"
+        fi
+
+        # EncryptedRandomSessionKey = RC4(SessionBaseKey, ExportedSessionKey)
+        rc4::crypt "${session_base_key}" "${exported_session_key}" encrypted_session_key
+
+        log::debug "ntlm::auth : SessionBaseKey=${session_base_key}"
+        log::debug "ntlm::auth : ExportedSessionKey=${exported_session_key}"
+        log::debug "ntlm::auth : EncryptedSessionKey=${encrypted_session_key}"
+    fi
+
+    # Exporter ExportedSessionKey si demandé
+    if [[ -n "${_ntlm_esk_varname}" ]]; then
+        local -n _ntlm_esk_out="${_ntlm_esk_varname}"
+        _ntlm_esk_out="${exported_session_key}"
+    fi
 
     # Encoder les champs texte en UTF-16LE
     local domain_utf16 username_utf16 workstation_utf16
@@ -186,22 +268,25 @@ ntlm::authenticate::build() {
     local -i dom_len=$(( ${#domain_utf16} / 2 ))
     local -i usr_len=$(( ${#username_utf16} / 2 ))
     local -i ws_len=$(( ${#workstation_utf16} / 2 ))
+    local -i esk_len=0
+    (( _has_key_exch )) && esk_len=16
 
-    # Calcul des offsets (header = 72 octets avec Version, sans MIC pour simplifier)
-    local -i base_offset=72
+    # Début des blobs : 64 + (8 Version + 16 MIC si VERSION)
+    local -i base_offset=64
+    (( _has_ver )) && base_offset=88
     local -i lm_off="${base_offset}"
     local -i nt_off=$(( lm_off + lm_len ))
     local -i dom_off=$(( nt_off + nt_len ))
     local -i usr_off=$(( dom_off + dom_len ))
     local -i ws_off=$(( usr_off + usr_len ))
+    local -i esk_off=$(( ws_off + ws_len ))
 
     # ── Assembler le message ──────────────────────────────────────────────────
-    local buf="${_NTLM_AUTH_SIG}"       # Signature (8 octets)
+    local buf="${_NTLM_AUTH_SIG}"
 
     local msgtype; endian::le32 3 msgtype
-    buf+="${msgtype}"                   # MessageType = 3 (4 octets)
+    buf+="${msgtype}"
 
-    # Fonction helper pour un champ FieldsHeader(Len, MaxLen, Offset)
     _ntlm_field() {
         local -i l="$1" o="$2"
         local lh oh
@@ -210,24 +295,18 @@ ntlm::authenticate::build() {
         printf '%s%s%s' "${lh}" "${lh}" "${oh}"
     }
 
-    buf+="$(_ntlm_field "${lm_len}"  "${lm_off}")"   # LmChallengeResponseFields
-    buf+="$(_ntlm_field "${nt_len}"  "${nt_off}")"    # NtChallengeResponseFields
-    buf+="$(_ntlm_field "${dom_len}" "${dom_off}")"   # DomainNameFields
-    buf+="$(_ntlm_field "${usr_len}" "${usr_off}")"   # UserNameFields
-    buf+="$(_ntlm_field "${ws_len}"  "${ws_off}")"    # WorkstationFields
+    buf+="$(_ntlm_field "${lm_len}"  "${lm_off}")"
+    buf+="$(_ntlm_field "${nt_len}"  "${nt_off}")"
+    buf+="$(_ntlm_field "${dom_len}" "${dom_off}")"
+    buf+="$(_ntlm_field "${usr_len}" "${usr_off}")"
+    buf+="$(_ntlm_field "${ws_len}"  "${ws_off}")"
+    buf+="$(_ntlm_field "${esk_len}" "${esk_off}")"   # EncryptedRandomSessionKey
 
-    # EncryptedRandomSessionKey — vide pour l'instant
-    buf+="00000000" buf+="0000"  # Len=0, MaxLen=0, Offset=0
-    local esk_off; endian::le32 "$(( ws_off + ws_len ))" esk_off
-    # Correction : les 8 derniers octets ajoutés ci-dessus sont incorrects.
-    # On retire et réécrit correctement :
-    buf="${buf:0:$(( ${#buf} - 12 ))}"
-    buf+="0000000000000000"              # SessionKey fields vides (8 octets)
-
-    buf+="${flags_hex}"                 # NegotiateFlags (4 octets)
-
-    # Version : Windows 10.0.19041 Rev 15
-    buf+="0A00414B0000000F"             # Version (8 octets)
+    buf+="${flags_hex}"                 # NegotiateFlags
+    if (( _has_ver )); then
+        buf+="0A00414B0000000F"         # Version
+        buf+="00000000000000000000000000000000"  # MIC (calculé si _need_mic)
+    fi
 
     # ── Payload ───────────────────────────────────────────────────────────────
     buf+="${lm_response}"
@@ -235,8 +314,20 @@ ntlm::authenticate::build() {
     buf+="${domain_utf16}"
     buf+="${username_utf16}"
     buf+="${workstation_utf16}"
+    (( _has_key_exch )) && buf+="${encrypted_session_key}"
 
-    _ntlm_auth_out="${buf^^}"
+    buf="${buf^^}"
+
+    if (( _need_mic )); then
+        local _concat="${negotiate_hex^^}${challenge_hex^^}${buf}"
+        local _mic
+        hmac_md5::compute "${session_base_key}" "${_concat}" _mic || return 1
+        # MIC à l’offset 68 (16 o) : 60 o d’en-tête + 8 o Version → 136 nibbles
+        buf="${buf:0:136}${_mic:0:32}${buf:168}"
+        log::debug "ntlm::auth : MIC OK (${_mic:0:8}...)"
+    fi
+
+    _ntlm_auth_out="${buf}"
 }
 
 # ntlm::authenticate::parse <hex_msg> <var_out_dict>

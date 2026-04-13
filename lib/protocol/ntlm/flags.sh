@@ -88,21 +88,67 @@ ntlm::flags::clear() {
 
 # ntlm::flags::default_negotiate <var_out>
 #
-# Retourne les flags typiques d'un message Negotiate client.
+# Retourne les flags typiques d'un message Negotiate client NTLMv2
+# sans exigence explicite de signing.
 ntlm::flags::default_negotiate() {
     local -i f=0
     (( f |= NTLM_FL_UNICODE ))
     (( f |= NTLM_FL_REQUEST_TARGET ))
     (( f |= NTLM_FL_NTLM ))
-    (( f |= NTLM_FL_ALWAYS_SIGN ))
     (( f |= NTLM_FL_EXTENDED_SESS_SEC ))
-    (( f |= NTLM_FL_VERSION ))      # signale la présence du champ Version
+    (( f |= NTLM_FL_TARGET_INFO ))
     (( f |= NTLM_FL_128BIT ))
-    # KEY_EXCH intentionnellement absent : on n'envoie pas de session key chiffrée.
-    # Conséquence : EncryptedRandomSessionKey DOIT avoir Len=0 dans l'Authenticate.
-    # La signature de session ne sera pas disponible, mais l'auth réussit.
     (( f |= NTLM_FL_56BIT ))
     ntlm::flags::to_le32 "${f}" "$1"
+}
+
+# ntlm::flags::type1_for_signing <var_out> [signing_required_int]
+#
+# Construit les flags NTLM du Type 1 comme le fait impacket pour SMB :
+# si le serveur exige le signing, on annonce SIGN/SEAL/ALWAYS_SIGN/KEY_EXCH.
+ntlm::flags::type1_for_signing() {
+    local -n _t1fs_out="$1"
+    local -i signing_required="${2:-0}"
+    local base_hex
+    local -i f
+
+    ntlm::flags::default_negotiate base_hex
+    ntlm::flags::from_le32 "${base_hex}" f
+
+    if (( signing_required != 0 )); then
+        (( f |= NTLM_FL_KEY_EXCH ))
+        (( f |= NTLM_FL_SIGN ))
+        (( f |= NTLM_FL_ALWAYS_SIGN ))
+        (( f |= NTLM_FL_SEAL ))
+    fi
+
+    ntlm::flags::to_le32 "${f}" _t1fs_out
+}
+
+# ntlm::flags::type3_from_challenge <type1_flags_hex_le32> <challenge_flags_hex_le32> <var_out_hex>
+#
+# Construit les NegotiateFlags du message NTLM Authenticate (Type 3) à partir
+# des flags du Challenge (Type 2), comme impacket / MS-NLMP : on part des
+# flags réellement envoyés dans le Type 1, et on
+# retire tout bit que le serveur n'a pas proposé dans le Type 2.
+ntlm::flags::type3_from_challenge() {
+    local type1="${1^^}"
+    local chall="${2^^}"
+    local -n _t3fc_out="$3"
+    local -i c r
+
+    ntlm::flags::from_le32 "${type1}" r
+    ntlm::flags::from_le32 "${chall}" c
+
+    (( (c & NTLM_FL_EXTENDED_SESS_SEC) == 0 )) && r=$(( r & ~NTLM_FL_EXTENDED_SESS_SEC ))
+    (( (c & NTLM_FL_128BIT) == 0 )) && r=$(( r & ~NTLM_FL_128BIT ))
+    (( (c & NTLM_FL_KEY_EXCH) == 0 )) && r=$(( r & ~NTLM_FL_KEY_EXCH ))
+    (( (c & NTLM_FL_SEAL) == 0 )) && r=$(( r & ~NTLM_FL_SEAL ))
+    (( (c & NTLM_FL_SIGN) == 0 )) && r=$(( r & ~NTLM_FL_SIGN ))
+    (( (c & NTLM_FL_ALWAYS_SIGN) == 0 )) && r=$(( r & ~NTLM_FL_ALWAYS_SIGN ))
+    (( (c & NTLM_FL_TARGET_INFO) == 0 )) && r=$(( r & ~NTLM_FL_TARGET_INFO ))
+
+    ntlm::flags::to_le32 "${r}" _t3fc_out
 }
 
 # ntlm::flags::describe <flags_hex_le32>

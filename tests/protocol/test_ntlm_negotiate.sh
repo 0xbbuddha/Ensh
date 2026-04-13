@@ -53,3 +53,11 @@ test::ntlm_negotiate_with_domain() {
     ntlm::negotiate::build msg "CORP" "WORKSTATION"
     assert::not_empty "${msg}" "message avec domaine non vide"
 }
+
+test::ntlm_negotiate_with_explicit_flags() {
+    local msg flags
+    ntlm::flags::type1_for_signing flags 1
+    ntlm::negotiate::build msg "CORP" "WORKSTATION" "${flags}"
+    local got_flags="${msg:24:8}"
+    assert::equal "${got_flags}" "${flags}" "le builder conserve les flags fournis"
+}

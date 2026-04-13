@@ -44,21 +44,24 @@ readonly SMB2_SHARE_TYPE_PRINT=3
 # ── Construction ──────────────────────────────────────────────────────────────
 
 # smb2::tree_connect::build_request <var_out> <unc_path> <msg_id_int>
-#                                   <session_id_hex16>
+#                                   <session_id_hex16> [header_flags_int]
 #
 # Construit un SMB2 TREE_CONNECT complet.
 # <unc_path> : chemin UNC ex: "\\10.10.10.1\IPC$"
+# [header_flags_int] : drapeaux en-tête SMB2 (ex. SMB2_FLAGS_DFS_OPERATIONS si le serveur
+#                      annonce SMB2_CAP_DFS — MS-SMB2 §3.2.5.6).
 smb2::tree_connect::build_request() {
     local -n _smb2_tc_req_out="$1"
     local unc_path="$2"
     local -i msg_id="$3"
     local session_id="${4:-0000000000000000}"
+    local -i hdr_flags="${5:-0}"
 
     # ── En-tête SMB2 ─────────────────────────────────────────────────────────
     local hdr
     smb2::header::build hdr \
         "${SMB2_CMD_TREE_CONNECT}" "${msg_id}" \
-        "${session_id}" 0 0 0 1 1
+        "${session_id}" 0 0 "${hdr_flags}" "${SMB2_CREDIT_REQUEST_LARGE}" 1
 
     # ── Chemin UNC en UTF-16LE (sans null terminator) ─────────────────────────
     local path_utf16
@@ -78,9 +81,19 @@ smb2::tree_connect::build_request() {
     body+="${path_len_le}" # PathLength
     body+="${path_utf16}"  # Path
 
+    # MS-SMB2 §2.2.9 : aligner le message entier sur 8 octets (padding après Path)
+    local -i _tot=$(( 64 + 8 + path_len ))
+    local -i _rem=$(( _tot % 8 ))
+    if (( _rem != 0 )); then
+        local -i _pad=$(( 8 - _rem ))
+        local _p=""
+        printf -v _p '%*s' $(( _pad * 2 )) ''
+        body+="${_p// /0}"
+    fi
+
     local smb="${hdr}${body}"
     smb2::nbt_wrap "${smb}" _smb2_tc_req_out
-    log::debug "smb2::tree_connect : '${unc_path}' (msg_id=${msg_id})"
+    log::debug "smb2::tree_connect : '${unc_path}' (msg_id=${msg_id} hdr_flags=0x$(printf '%08X' ${hdr_flags}))"
 }
 
 # ── Parsing ───────────────────────────────────────────────────────────────────
@@ -103,7 +116,7 @@ smb2::tree_connect::parse_response() {
     _smb2_tc_pr_dict[tree_id]="${_hdr[tree_id]}"
 
     if (( _hdr[status] != SMB2_STATUS_SUCCESS )); then
-        log::debug "smb2::tree_connect : status=0x$(printf '%08X' ${_hdr[status]})"
+        log::error "smb2::tree_connect : status=0x$(printf '%08X' ${_hdr[status]})"
         return 1
     fi
 
@@ -120,7 +133,7 @@ smb2::tree_connect::parse_response() {
 }
 
 # smb2::tree_disconnect::build_request <var_out> <msg_id_int>
-#                                      <session_id_hex16> <tree_id_int>
+#                                      <session_id_hex16> <tree_id_int> [header_flags_int]
 #
 # Construit un SMB2 TREE_DISCONNECT.
 smb2::tree_disconnect::build_request() {
@@ -128,11 +141,12 @@ smb2::tree_disconnect::build_request() {
     local -i msg_id="$2"
     local session_id="$3"
     local -i tree_id="$4"
+    local -i hdr_flags="${5:-0}"
 
     local hdr
     smb2::header::build hdr \
         "${SMB2_CMD_TREE_DISCONNECT}" "${msg_id}" \
-        "${session_id}" "${tree_id}" 0 0 1 1
+        "${session_id}" "${tree_id}" 0 "${hdr_flags}" "${SMB2_CREDIT_REQUEST_LARGE}" 1
 
     # StructureSize = 4, Reserved = 0
     local body="0400" body+="0000"

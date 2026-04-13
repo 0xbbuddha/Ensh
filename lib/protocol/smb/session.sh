@@ -38,6 +38,7 @@
 readonly _ENSH_SMB_SESSION=1
 
 ensh::import core/log
+ensh::import encoding/utf16
 ensh::import transport/tcp
 ensh::import crypto/nt_hash
 ensh::import protocol/ntlm/negotiate
@@ -52,6 +53,9 @@ ensh::import protocol/smb/smb2/header
 ensh::import protocol/smb/smb2/negotiate
 ensh::import protocol/smb/smb2/session_setup
 ensh::import protocol/smb/smb2/tree_connect
+ensh::import protocol/smb/smb2/ioctl
+ensh::import protocol/smb/smb2/signing
+ensh::import protocol/smb/smb3/signing
 
 # ── Registre de sessions ──────────────────────────────────────────────────────
 
@@ -62,15 +66,61 @@ declare -gA _SMB_VERSION=()
 declare -gA _SMB_PID=()
 declare -gA _SMB_SESSION_KEY=()
 declare -gA _SMB_EXT_SEC=()
-declare -gA _SMB_UID=()         # SMB1 User ID
-declare -gA _SMB_MSG_ID=()      # SMB2 MessageId counter
-declare -gA _SMB_SESSION_ID=()  # SMB2 SessionId (hex 16 nibbles LE)
+declare -gA _SMB_UID=()              # SMB1 User ID
+declare -gA _SMB_MSG_ID=()           # SMB2 MessageId counter
+declare -gA _SMB_TREE_IPC=()         # TreeId du partage IPC$ (SMB2)
+declare -gA _SMB_SESSION_ID=()       # SMB2 SessionId (hex 16 nibbles LE)
+declare -gA _SMB_DIALECT=()          # dialecte SMB2 négocié (entier)
+declare -gA _SMB_SIGNING_KEY=()      # clé de signature SMB2 dérivée
+declare -gA _SMB_SIGNING_ENABLED=()  # "1" si signature active
+declare -gA _SMB_UNC_HOST=()         # nom NetBIOS serveur (NTLM TargetInfo) pour \\name\share ; sinon IP
+declare -gA _SMB_SERVER_CAPS=()      # capacités globales SMB2 (réponse NEGOTIATE), ex. DFS
+declare -gA _SMB_NETR_ENUM_NAME=()   # nom hôte ayant réussi le TREE_CONNECT (NetrShareEnum / même UNC)
+declare -gA _SMB_SECURITY_MODE=()    # security_mode SMB2 négocié
+
+# SMB2_FLAGS_DFS_OPERATIONS est lié au partage/chemin ciblé, pas à la simple
+# capacité globale du serveur. Le forcer sur IPC$ / named pipes casse certains
+# serveurs Windows. On garde donc ce drapeau désactivé par défaut tant qu'Ensh
+# ne suit pas les capacités de partage par TreeId.
+smb::_smb2_dfs_hdr_flags() {
+    local _sess="$1"
+    if [[ "${ENSH_SMB2_FORCE_DFS:-0}" == "1" ]]; then
+        printf '%u' "${SMB2_FLAGS_DFS_OPERATIONS}"
+    else
+        printf '0'
+    fi
+}
+
+# SMB2 CREATE attend un nom relatif au partage, sans antislash initial.
+smb::_normalize_pipe_name() {
+    local _name="$1"
+    while [[ "${_name}" == \\* ]]; do
+        _name="${_name#\\}"
+    done
+    printf '%s' "${_name}"
+}
 
 # ── Primitives réseau ─────────────────────────────────────────────────────────
 
 # smb::_send <session> <hex_data>
+# Signe automatiquement si la signature est activée sur la session.
 smb::_send() {
-    tcp::send "${_SMB_TCP[$1]}" "${2^^}"
+    local _sess="$1"
+    local _data="${2^^}"
+
+    if [[ "${_SMB_SIGNING_ENABLED[${_sess}]:-0}" == "1" ]]; then
+        local -i _sd=$(( ${_SMB_DIALECT[${_sess}]:-770} ))
+        if (( _sd == 0x0202 || _sd == 0x0210 )); then
+            smb2::signing::sign_nbt _data \
+                "${_SMB_SIGNING_KEY[${_sess}]}" \
+                "${_sd}" || return 1
+        else
+            smb3::signing::sign_nbt _data \
+                "${_SMB_SIGNING_KEY[${_sess}]}" || return 1
+        fi
+    fi
+
+    tcp::send "${_SMB_TCP[${_sess}]}" "${_data}"
 }
 
 # smb::_recv <session> <var_out> [timeout]
@@ -86,8 +136,11 @@ smb::_recv() {
         return 1
     }
 
-    local -i _plen
-    endian::read_be16 "${_nbt_hdr}" 2 _plen
+    # Longueur NetBIOS 24 bits : byte1<<16 | BE16(bytes 2–3) (impacket nmb.NetBIOSSessionPacket)
+    local -i _nb1 _low _plen
+    _nb1=$(( 16#${_nbt_hdr:2:2} ))
+    endian::read_be16 "${_nbt_hdr}" 2 _low
+    _plen=$(( (_nb1 << 16) | _low ))
 
     if (( _plen == 0 )); then
         _smb_recv_out=""
@@ -145,10 +198,12 @@ smb::session::disconnect() {
 
     tcp::close "${_handle}" 2>/dev/null || true
 
-    unset "_SMB_TCP[${_sess}]"   "_SMB_HOST[${_sess}]"    "_SMB_PORT[${_sess}]"
-    unset "_SMB_VERSION[${_sess}]" "_SMB_PID[${_sess}]"  "_SMB_SESSION_KEY[${_sess}]"
-    unset "_SMB_EXT_SEC[${_sess}]" "_SMB_UID[${_sess}]"  "_SMB_MSG_ID[${_sess}]"
-    unset "_SMB_SESSION_ID[${_sess}]"
+    unset "_SMB_TCP[${_sess}]"    "_SMB_HOST[${_sess}]"           "_SMB_PORT[${_sess}]"
+    unset "_SMB_VERSION[${_sess}]" "_SMB_PID[${_sess}]"          "_SMB_SESSION_KEY[${_sess}]"
+    unset "_SMB_EXT_SEC[${_sess}]" "_SMB_UID[${_sess}]"          "_SMB_MSG_ID[${_sess}]"
+    unset "_SMB_SESSION_ID[${_sess}]" "_SMB_TREE_IPC[${_sess}]"  "_SMB_DIALECT[${_sess}]"
+    unset "_SMB_SIGNING_KEY[${_sess}]" "_SMB_SIGNING_ENABLED[${_sess}]" "_SMB_UNC_HOST[${_sess}]"
+    unset "_SMB_SERVER_CAPS[${_sess}]" "_SMB_NETR_ENUM_NAME[${_sess}]" "_SMB_SECURITY_MODE[${_sess}]"
     log::debug "smb : session fermée"
 }
 
@@ -182,7 +237,11 @@ smb::session::negotiate() {
 
             local -A _neg2
             smb2::negotiate::parse_response "${_resp}" _neg2 || return 1
+            _SMB_DIALECT["${_sess}"]="${_neg2[dialect]}"
+            _SMB_SERVER_CAPS["${_sess}"]="${_neg2[capabilities]}"
+            _SMB_SECURITY_MODE["${_sess}"]="${_neg2[security_mode]}"
             log::info "smb : SMB2 négocié — dialecte=0x$(printf '%04X' ${_neg2[dialect]}) caps=0x$(printf '%08X' ${_neg2[capabilities]})"
+            log::debug "smb2 : negotiate security_mode=0x$(printf '%04X' ${_neg2[security_mode]:-0}) (0x0001=signing_enabled, 0x0002=signing_required)"
             return 0
         fi
     fi
@@ -261,8 +320,11 @@ _smb2_login() {
     nt_hash::from_password "${_pass}" _nt_hash
 
     # ── SessionSetup #1 : NTLM Negotiate ────────────────────────────────────
-    local _ntlm_neg _spnego_init _msg_id1 _req1
-    ntlm::negotiate::build _ntlm_neg "${_domain}" "" ""
+    local _ntlm_neg _spnego_init _msg_id1 _req1 _t1_flags
+    local -i _sign_required=0
+    (( ${_SMB_SECURITY_MODE[${_sess}]:-0} & SMB2_SEC_SIGNING_REQUIRED )) && _sign_required=1
+    ntlm::flags::type1_for_signing _t1_flags "${_sign_required}"
+    ntlm::negotiate::build _ntlm_neg "${_domain}" "ENSH" "${_t1_flags}"
     spnego::ntlm_init "${_ntlm_neg}" _spnego_init
 
     smb2::_next_msg_id "${_sess}" _msg_id1
@@ -297,13 +359,49 @@ _smb2_login() {
     ntlm::challenge::parse "${_ntlm_challenge}" _chall || return 1
     log::debug "smb2::login : challenge = ${_chall[server_challenge]}"
 
+    # UNC pour TREE_CONNECT : nom NetBIOS / DNS court du TargetInfo (souvent requis sur DC) ;
+    # smb::session::tree_connect essaie ce nom puis l’IP si refus.
+    unset "_SMB_UNC_HOST[${_sess}]"
+    if [[ -n "${_chall[target_info]:-}" ]]; then
+        local -A _ti
+        ntlm::challenge::parse_target_info "${_chall[target_info]}" _ti
+        if [[ -n "${_ti[nb_computer]:-}" ]]; then
+            local _hn
+            utf16::decode_le "${_ti[nb_computer]}" _hn || true
+            _hn="${_hn//$'\r'/}"
+            _hn="${_hn//$'\n'/}"
+            if [[ -n "${_hn}" ]]; then
+                _SMB_UNC_HOST["${_sess}"]="${_hn^^}"
+                log::debug "smb2::login : UNC serveur (NetBIOS) = ${_SMB_UNC_HOST[${_sess}]}"
+            fi
+        fi
+        if [[ -z "${_SMB_UNC_HOST[${_sess}]:-}" && -n "${_ti[dns_computer]:-}" ]]; then
+            local _hd
+            utf16::decode_le "${_ti[dns_computer]}" _hd || true
+            _hd="${_hd%%.*}"
+            _hd="${_hd//$'\r'/}"
+            _hd="${_hd//$'\n'/}"
+            if [[ -n "${_hd}" ]]; then
+                _SMB_UNC_HOST["${_sess}"]="${_hd^^}"
+                log::debug "smb2::login : UNC serveur (DNS court) = ${_SMB_UNC_HOST[${_sess}]}"
+            fi
+        fi
+    fi
+
     # ── SessionSetup #2 : NTLM Authenticate ─────────────────────────────────
     local _ntlm_auth _spnego_auth _msg_id2 _req2
+    local _t3_flags
+    ntlm::flags::type3_from_challenge "${_t1_flags}" "${_chall[flags]}" _t3_flags
+    log::debug "smb2::login : challenge flags=${_chall[flags]} → type3 flags=${_t3_flags}"
+    local _exported_session_key=""
     ntlm::authenticate::build _ntlm_auth \
         "${_user}" "${_domain}" "ENSH" \
         "${_nt_hash}" \
         "${_chall[server_challenge]}" \
-        "${_chall[target_info]}"
+        "${_chall[target_info]}" \
+        "${_t3_flags}" "" "" \
+        _exported_session_key \
+        "${_ntlm_neg}" "${_ntlm_challenge}"
 
     spnego::ntlm_auth "${_ntlm_auth}" _spnego_auth
 
@@ -334,8 +432,83 @@ _smb2_login() {
     local _final_sid="${_ss2[session_id]}"
     [[ "${_final_sid}" != "0000000000000000" ]] && _SMB_SESSION_ID["${_sess}"]="${_final_sid}"
 
+    # Inspecter les SessionFlags : guest (0x01), null (0x02), chiffrement requis (0x04)
+    local -i _sflags="${_ss2[session_flags]:-0}"
     local _guest=""
-    (( (_ss2[session_flags] & 0x0001) != 0 )) && _guest=" [GUEST]"
+    (( _sflags & 0x0001 )) && _guest=" [GUEST]"
+    log::info "smb2 : session_flags=0x$(printf '%04X' ${_sflags}) session_id=${_SMB_SESSION_ID[${_sess}]}"
+    if (( _sflags & 0x0004 )); then
+        log::warn "smb2 : le serveur exige le chiffrement SMB2 — non implémenté, TREE_CONNECT échouera"
+    fi
+
+    # ── Activation du signing SMB2 ────────────────────────────────────────────
+    # Dériver la SigningKey depuis l'ExportedSessionKey NTLM
+    if [[ -n "${_exported_session_key}" ]]; then
+        log::info "smb2 : ExportedSessionKey=${_exported_session_key}"
+        log::info "smb2 : SessionId KDF     =${_SMB_SESSION_ID[${_sess}]}"
+
+        local _signing_key
+        local -i _dia=$(( ${_SMB_DIALECT[${_sess}]:-770} ))
+        if (( _dia == 0x0202 || _dia == 0x0210 )); then
+            smb2::signing::derive_key _signing_key \
+                "${_exported_session_key}" \
+                "${_dia}" || true
+        else
+            smb3::signing::derive_key _signing_key \
+                "${_exported_session_key}" \
+                "${_dia}" \
+                "${_SMB_SESSION_ID[${_sess}]}" || true
+        fi
+
+        if [[ -n "${_signing_key}" ]]; then
+            _SMB_SIGNING_KEY["${_sess}"]="${_signing_key}"
+            _SMB_SIGNING_ENABLED["${_sess}"]="1"
+            log::info "smb2 : signing activé (dialecte=0x$(printf '%04X' ${_dia}) clé=${_signing_key})"
+
+            # ── Vérification optionnelle de la signature (1er sous-message si compound)
+            # Longueur signée = un seul SMB2 : NextCommand si compound, sinon fin du buffer
+            # sécurité (offset+len du SecurityBuffer, aligné 8 o) — sinon le CMAC inclut du
+            # remplissage / un 2e message et ne correspond pas à ce que le serveur a signé.
+            local -i _ss2_smb_flags _ss2_next
+            endian::read_le32 "${_resp2}" 16 _ss2_smb_flags
+            endian::read_le32 "${_resp2}" 20 _ss2_next
+            local _resp2_sig="${_resp2}"
+            local -i _buf_b=$(( ${#_resp2} / 2 ))
+            if (( _ss2_next > 0 )); then
+                _resp2_sig="${_resp2:0:$((_ss2_next * 2))}"
+                log::debug "smb2 : SESSION_SETUP compound NextCommand=${_ss2_next} octets — vérif sur le 1er sous-message"
+            elif (( _buf_b > 64 )); then
+                local -i _so _sl
+                endian::read_le16 "${_resp2}" 68 _so
+                endian::read_le16 "${_resp2}" 70 _sl
+                if (( _so >= 64 && _sl >= 0 && _so + _sl <= _buf_b )); then
+                    local -i _raw=$(( _so + _sl ))
+                    local -i _end=$(( ( (_raw + 7) / 8 ) * 8 ))
+                    (( _end > _buf_b )) && _end="${_buf_b}"
+                    _resp2_sig="${_resp2:0:$((_end * 2))}"
+                    (( _end < _buf_b )) && log::debug "smb2 : vérif signature sur ${_end} o (buffer reçu ${_buf_b} o)"
+                fi
+            fi
+            if (( _ss2_smb_flags & SMB2_FLAGS_SIGNED )); then
+                if (( _dia == 0x0202 || _dia == 0x0210 )); then
+                    if smb2::signing::verify "${_resp2_sig}" "${_signing_key}" "${_dia}"; then
+                        log::debug "smb2 : signature serveur SESSION_SETUP OK"
+                    else
+                        log::debug "smb2 : signature serveur SESSION_SETUP non vérifiée (compound / marge client)"
+                    fi
+                else
+                    if smb3::signing::verify "${_resp2_sig}" "${_signing_key}"; then
+                        log::debug "smb2 : signature serveur SESSION_SETUP OK"
+                    else
+                        log::debug "smb2 : signature serveur SESSION_SETUP non vérifiée (compound / marge client)"
+                    fi
+                fi
+            fi
+        fi
+    else
+        log::warn "smb2 : ExportedSessionKey vide — KEY_EXCH absent ou RC4 échoué, signing désactivé"
+    fi
+
     log::info "smb2 : authentifié en tant que ${_domain}\\${_user}${_guest}"
 }
 
@@ -352,8 +525,9 @@ _smb1_login() {
     local _nt_hash
     nt_hash::from_password "${_pass}" _nt_hash
 
-    local _ntlm_neg _spnego_init _req1
-    ntlm::negotiate::build _ntlm_neg "${_domain}" "" ""
+    local _ntlm_neg _spnego_init _req1 _t1_flags_smb1
+    ntlm::flags::type1_for_signing _t1_flags_smb1 1
+    ntlm::negotiate::build _ntlm_neg "${_domain}" "ENSH" "${_t1_flags_smb1}"
     spnego::ntlm_init "${_ntlm_neg}" _spnego_init
     smb1::session_setup::build_ntlm_init _req1 "${_spnego_init}" "${_pid}" "${_skey}"
 
@@ -381,12 +555,18 @@ _smb1_login() {
     local -A _chall
     ntlm::challenge::parse "${_ntlm_challenge}" _chall || return 1
 
+    local _t3_flags_smb1
+    ntlm::flags::type3_from_challenge "${_t1_flags_smb1}" "${_chall[flags]}" _t3_flags_smb1
+
     local _ntlm_auth _spnego_auth _req2
     ntlm::authenticate::build _ntlm_auth \
         "${_user}" "${_domain}" "ENSH" \
         "${_nt_hash}" \
         "${_chall[server_challenge]}" \
-        "${_chall[target_info]}"
+        "${_chall[target_info]}" \
+        "${_t3_flags_smb1}" \
+        "" "" "" \
+        "${_ntlm_neg}" "${_ntlm_challenge}"
 
     spnego::ntlm_auth "${_ntlm_auth}" _spnego_auth
     smb1::session_setup::build_ntlm_auth _req2 "${_spnego_auth}" "${_uid}" "${_pid}" "${_skey}"
@@ -419,24 +599,43 @@ smb::session::tree_connect() {
     local -n _smb_tc_tid_out="$3"
     local _service="${4:-?????}"
     local _host="${_SMB_HOST[${_sess}]}"
-    local _unc="\\\\${_host}\\${_share}"
+    local _nb="${_SMB_UNC_HOST[${_sess}]:-}"
 
     if [[ "${_SMB_VERSION[${_sess}]}" == "2" ]]; then
-        local _msg_id; smb2::_next_msg_id "${_sess}" _msg_id
-        local _req
-        smb2::tree_connect::build_request _req "${_unc}" "${_msg_id}" \
-            "${_SMB_SESSION_ID[${_sess}]}"
-        smb::_send "${_sess}" "${_req}" || return 1
+        local -a _tc_try=()
+        [[ -n "${_nb}" && "${_nb}" != "${_host}" ]] && _tc_try+=("${_nb}")
+        _tc_try+=("${_host}")
 
-        local _resp
-        smb::_recv "${_sess}" _resp 30 || return 1
-
-        local -A _tc
-        smb2::tree_connect::parse_response "${_resp}" _tc || return 1
-        _smb_tc_tid_out="${_tc[tree_id]}"
-        log::info "smb2 : partage '${_share}' connecté (tid=${_tc[tree_id]} type=${_tc[share_type]})"
+        local _tc_ok=0
+        local _tgt _unc _req _resp
+        local -A _tc_hdr _tc
+        local -i _tc_dfs_h; _tc_dfs_h="$(smb::_smb2_dfs_hdr_flags "${_sess}")"
+        for _tgt in "${_tc_try[@]}"; do
+            _unc="\\\\${_tgt}\\${_share}"
+            local _msg_id; smb2::_next_msg_id "${_sess}" _msg_id
+            smb2::tree_connect::build_request _req "${_unc}" "${_msg_id}" \
+                "${_SMB_SESSION_ID[${_sess}]}" "${_tc_dfs_h}"
+            smb::_send "${_sess}" "${_req}" || return 1
+            smb::_recv "${_sess}" _resp 30 || return 1
+            smb2::header::parse "${_resp}" _tc_hdr || return 1
+            if (( _tc_hdr[status] == SMB2_STATUS_SUCCESS )); then
+                smb2::tree_connect::parse_response "${_resp}" _tc || return 1
+                _smb_tc_tid_out="${_tc[tree_id]}"
+                _tc_ok=1
+                _SMB_NETR_ENUM_NAME["${_sess}"]="${_tgt}"
+                log::info "smb2 : partage '${_share}' connecté (tid=${_tc[tree_id]} type=${_tc[share_type]}) via \\\\${_tgt}\\"
+                break
+            fi
+            log::debug "smb2::tree_connect : ${_unc} status=0x$(printf '%08X' ${_tc_hdr[status]}) — autre candidat ?"
+        done
+        (( _tc_ok )) || {
+            log::error "smb2::tree_connect : échec pour tous les noms (NetBIOS/IP)"
+            return 1
+        }
 
     else
+        local _tgt="${_nb:-${_host}}"
+        local _unc="\\\\${_tgt}\\${_share}"
         local -i _uid="${_SMB_UID[${_sess}]}"
         local -i _mid=$(( RANDOM % 65534 + 4 ))
         local _req
@@ -462,8 +661,9 @@ smb::session::tree_disconnect() {
     if [[ "${_SMB_VERSION[${_sess}]}" == "2" ]]; then
         local _msg_id; smb2::_next_msg_id "${_sess}" _msg_id
         local _req
+        local -i _td_dfs_h; _td_dfs_h="$(smb::_smb2_dfs_hdr_flags "${_sess}")"
         smb2::tree_disconnect::build_request _req "${_msg_id}" \
-            "${_SMB_SESSION_ID[${_sess}]}" "${_tid}"
+            "${_SMB_SESSION_ID[${_sess}]}" "${_tid}" "${_td_dfs_h}"
         smb::_send "${_sess}" "${_req}" || true
         local _resp; smb::_recv "${_sess}" _resp 5 || true
 
@@ -481,6 +681,128 @@ smb::session::tree_disconnect() {
     log::debug "smb : tree disconnect tid=${_tid}"
 }
 
+# ── Utilitaires SMB2 : named pipes ───────────────────────────────────────────
+
+# smb::session::open_pipe <session> <pipe_name> <var_file_id_out>
+#
+# Ouvre un named pipe sur IPC$ via SMB2 CREATE.
+# <pipe_name> : ex "\srvsvc", "\samr", "\lsarpc" (accepté avec ou sans '\' initial)
+# <var_file_id_out> : reçoit le FileId (32 nibbles hex = Persistent(8B) + Volatile(8B))
+#
+# Connecte automatiquement IPC$ si pas encore fait.
+smb::session::open_pipe() {
+    local _sess="$1"
+    local _pipe="$2"
+    local -n _smb_op_fid="$3"
+
+    [[ "${_SMB_VERSION[${_sess}]}" != "2" ]] && {
+        log::error "smb::session::open_pipe : SMB2 requis"
+        return 1
+    }
+
+    # Connecter IPC$ si pas encore fait
+    if [[ -z "${_SMB_TREE_IPC[${_sess}]:-}" ]]; then
+        log::debug "smb::session::open_pipe : connexion à IPC\$..."
+        local _ipc_tid
+        if ! smb::session::tree_connect "${_sess}" "IPC\$" _ipc_tid; then
+            log::error "smb::session::open_pipe : impossible de se connecter à IPC\$"
+            return 1
+        fi
+        _SMB_TREE_IPC["${_sess}"]="${_ipc_tid}"
+        log::debug "smb::session::open_pipe : IPC\$ tid=${_ipc_tid}"
+    fi
+
+    local -i _tid="${_SMB_TREE_IPC[${_sess}]}"
+    local _sid="${_SMB_SESSION_ID[${_sess}]}"
+
+    # SMB2 CREATE — ouvrir le named pipe
+    # DesiredAccess : 0x00000003 (FILE_READ_DATA | FILE_WRITE_DATA)
+    # FileAttributes : 0 (pipe, pas de fichier)
+    # ShareAccess : 3 (READ|WRITE)
+    # CreateDisposition : OPEN_EXISTING = 1
+    # CreateOptions : 0x00000040 (FILE_NON_DIRECTORY_FILE)
+    # NameOffset : 64 + 56 (header + corps fixe) = 120
+    local _msg_id; smb2::_next_msg_id "${_sess}" _msg_id
+    local -i _op_dfs_h; _op_dfs_h="$(smb::_smb2_dfs_hdr_flags "${_sess}")"
+
+    local _pipe_name
+    _pipe_name="$(smb::_normalize_pipe_name "${_pipe}")"
+    if [[ -z "${_pipe_name}" ]]; then
+        log::error "smb::session::open_pipe : nom de pipe vide"
+        return 1
+    fi
+
+    local _pipe_utf16; utf16::encode_le "${_pipe_name}" _pipe_utf16
+    local -i _name_len=$(( ${#_pipe_utf16} / 2 ))
+    local _name_off_le _name_len_le; endian::le16 120 _name_off_le; endian::le16 "${_name_len}" _name_len_le
+
+    local _hdr; smb2::header::build _hdr "${SMB2_CMD_CREATE}" "${_msg_id}" "${_sid}" "${_tid}" 0 "${_op_dfs_h}" "${SMB2_CREDIT_REQUEST_LARGE}" 1
+
+    local _body="3900"          # StructureSize = 57
+    _body+="00"                  # SecurityFlags = 0
+    _body+="00"                  # RequestedOplockLevel = 0 (NONE)
+    local _imp_le                # Impersonation = SecurityImpersonation (2) — MS-SMB2 / impacket
+    endian::le32 2 _imp_le
+    _body+="${_imp_le}"
+    _body+="0000000000000000"    # SmbCreateFlags = 0
+    _body+="0000000000000000"    # Reserved
+    _body+="03000000"            # DesiredAccess = FILE_READ_DATA | FILE_WRITE_DATA
+    _body+="00000000"            # FileAttributes = 0
+    _body+="03000000"            # ShareAccess = READ|WRITE
+    _body+="01000000"            # CreateDisposition = OPEN_EXISTING
+    _body+="40000000"            # CreateOptions = FILE_NON_DIRECTORY_FILE
+    _body+="${_name_off_le}"     # NameOffset
+    _body+="${_name_len_le}"     # NameLength
+    _body+="00000000"            # CreateContextsOffset = 0
+    _body+="00000000"            # CreateContextsLength = 0
+    _body+="${_pipe_utf16}"      # FileName (UTF-16LE)
+
+    local _smb="${_hdr}${_body}"; local _req; smb2::nbt_wrap "${_smb}" _req
+    smb::_send "${_sess}" "${_req}" || return 1
+
+    local _resp; smb::_recv "${_sess}" _resp 15 || return 1
+
+    # Parse CREATE response
+    local -A _cr_hdr; smb2::header::parse "${_resp}" _cr_hdr || return 1
+    if (( _cr_hdr[status] != SMB2_STATUS_SUCCESS )); then
+        log::error "smb::session::open_pipe : CREATE échoué status=0x$(printf '%08X' ${_cr_hdr[status]})"
+        return 1
+    fi
+
+    # FileId : bytes 132-163 (offset 66 dans le corps = 64+66 = 130 octets = 260 nibbles)
+    # Corps CREATE response : StructureSize(2) + OplockLevel(1) + Flags(1) + CreateAction(4)
+    #   + CreationTime(8) + LastAccessTime(8) + LastWriteTime(8) + ChangeTime(8)
+    #   + AllocationSize(8) + EndofFile(8) + FileAttributes(4) + Reserved2(4)
+    #   + FileId(16) ...
+    # Offset FileId = 64(header) + 2+1+1+4+8+8+8+8+8+8+4+4 = 64+64 = 128 octets = 256 nibbles
+    hex::slice "${_resp}" 128 16 _smb_op_fid
+    log::info "smb : pipe '${_pipe}' ouvert FileId=${_smb_op_fid:0:16}..."
+}
+
+# smb::session::close_pipe <session> <file_id_hex32>
+#
+# Ferme un named pipe ouvert via SMB2 CLOSE.
+smb::session::close_pipe() {
+    local _sess="$1"
+    local _fid="$2"
+    local -i _tid="${_SMB_TREE_IPC[${_sess}]:-0}"
+    local _sid="${_SMB_SESSION_ID[${_sess}]}"
+
+    local _msg_id; smb2::_next_msg_id "${_sess}" _msg_id
+    local -i _cl_dfs_h; _cl_dfs_h="$(smb::_smb2_dfs_hdr_flags "${_sess}")"
+    local _hdr; smb2::header::build _hdr "${SMB2_CMD_CLOSE}" "${_msg_id}" "${_sid}" "${_tid}" 0 "${_cl_dfs_h}" "${SMB2_CREDIT_REQUEST_LARGE}" 1
+
+    local _body="1800"     # StructureSize = 24
+    _body+="0000"          # Flags = 0
+    _body+="00000000"      # Reserved
+    _body+="${_fid}"       # FileId (16 octets)
+
+    local _smb="${_hdr}${_body}"; local _req; smb2::nbt_wrap "${_smb}" _req
+    smb::_send "${_sess}" "${_req}" || true
+    local _resp; smb::_recv "${_sess}" _resp 5 || true
+    log::debug "smb : pipe fermé"
+}
+
 # ── Utilitaire : try_share ────────────────────────────────────────────────────
 
 # smb::session::try_share <session> <share_name> <var_result_out>
@@ -492,40 +814,48 @@ smb::session::try_share() {
     local _share="$2"
     local -n _smb_ts_out="$3"
     local _host="${_SMB_HOST[${_sess}]}"
-    local _unc="\\\\${_host}\\${_share}"
+    local _nb="${_SMB_UNC_HOST[${_sess}]:-}"
 
-    # Construire et envoyer la requête
-    local _req
+    local -i _st=0
+
     if [[ "${_SMB_VERSION[${_sess}]}" == "2" ]]; then
-        local _msg_id; smb2::_next_msg_id "${_sess}" _msg_id
-        smb2::tree_connect::build_request _req "${_unc}" "${_msg_id}" \
-            "${_SMB_SESSION_ID[${_sess}]}"
+        local -a _ts_try=()
+        [[ -n "${_nb}" && "${_nb}" != "${_host}" ]] && _ts_try+=("${_nb}")
+        _ts_try+=("${_host}")
+        local -A _ts_hdr
+        local _req _unc _tgt _resp
+        local -i _ts_dfs_h; _ts_dfs_h="$(smb::_smb2_dfs_hdr_flags "${_sess}")"
+        for _tgt in "${_ts_try[@]}"; do
+            _unc="\\\\${_tgt}\\${_share}"
+            local _msg_id; smb2::_next_msg_id "${_sess}" _msg_id
+            smb2::tree_connect::build_request _req "${_unc}" "${_msg_id}" \
+                "${_SMB_SESSION_ID[${_sess}]}" "${_ts_dfs_h}"
+            smb::_send "${_sess}" "${_req}" || { _smb_ts_out="ERROR:NETWORK"; return 1; }
+            smb::_recv "${_sess}" _resp 10 || { _smb_ts_out="ERROR:TIMEOUT"; return 1; }
+            smb2::header::parse "${_resp}" _ts_hdr || { _smb_ts_out="ERROR:PARSE"; return 1; }
+            _st="${_ts_hdr[status]}"
+            if (( _st == SMB2_STATUS_SUCCESS )); then
+                local _hdr2_tid="${_ts_hdr[tree_id]}"
+                local _disc_req _disc_mid; smb2::_next_msg_id "${_sess}" _disc_mid
+                smb2::tree_disconnect::build_request _disc_req "${_disc_mid}" \
+                    "${_SMB_SESSION_ID[${_sess}]}" "${_hdr2_tid}" "${_ts_dfs_h}"
+                smb::_send "${_sess}" "${_disc_req}" 2>/dev/null || true
+                smb::_recv "${_sess}" _resp 5 2>/dev/null || true
+                break
+            fi
+        done
     else
+        local _tgt="${_nb:-${_host}}"
+        local _unc="\\\\${_tgt}\\${_share}"
         local -i _mid=$(( RANDOM % 65534 + 100 ))
+        local _req
         smb1::tree_connect::build_request _req "${_SMB_UID[${_sess}]}" \
             "${_unc}" "${_mid}" "${_SMB_PID[${_sess}]}"
-    fi
-
-    smb::_send "${_sess}" "${_req}" || { _smb_ts_out="ERROR:NETWORK"; return 1; }
-
-    local _resp
-    smb::_recv "${_sess}" _resp 10 || { _smb_ts_out="ERROR:TIMEOUT"; return 1; }
-
-    # Lire le status depuis l'en-tête
-    local -i _st
-    if [[ "${_SMB_VERSION[${_sess}]}" == "2" ]]; then
-        local -A _hdr2; smb2::header::parse "${_resp}" _hdr2 || { _smb_ts_out="ERROR:PARSE"; return 1; }
-        _st="${_hdr2[status]}"
-        if (( _st == SMB2_STATUS_SUCCESS )); then
-            local _hdr2_tid="${_hdr2[tree_id]}"
-            local _disc_req; local _disc_mid; smb2::_next_msg_id "${_sess}" _disc_mid
-            smb2::tree_disconnect::build_request _disc_req "${_disc_mid}" \
-                "${_SMB_SESSION_ID[${_sess}]}" "${_hdr2_tid}"
-            smb::_send "${_sess}" "${_disc_req}" 2>/dev/null || true
-            smb::_recv "${_sess}" _resp 5 2>/dev/null || true
-        fi
-    else
-        local -A _hdr1; smb1::header::parse "${_resp}" _hdr1 || { _smb_ts_out="ERROR:PARSE"; return 1; }
+        smb::_send "${_sess}" "${_req}" || { _smb_ts_out="ERROR:NETWORK"; return 1; }
+        local _resp
+        smb::_recv "${_sess}" _resp 10 || { _smb_ts_out="ERROR:TIMEOUT"; return 1; }
+        local -A _hdr1
+        smb1::header::parse "${_resp}" _hdr1 || { _smb_ts_out="ERROR:PARSE"; return 1; }
         _st="${_hdr1[status]}"
         if (( _st == SMB1_STATUS_SUCCESS )); then
             smb::session::tree_disconnect "${_sess}" "${_hdr1[tid]}" 2>/dev/null || true

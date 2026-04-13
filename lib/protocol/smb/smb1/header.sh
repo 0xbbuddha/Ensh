@@ -188,9 +188,11 @@ smb1::nbt_wrap() {
     local smb="${1^^}"
     local -n _smb1_nw_out="$2"
     local -i plen=$(( ${#smb} / 2 ))
-    local len_be
-    endian::be16 "${plen}" len_be
-    _smb1_nw_out="0000${len_be}${smb}"
+    local -i hi=$(( plen >> 16 ))
+    local -i lo=$(( plen & 0xFFFF ))
+    local lo_be
+    endian::be16 "${lo}" lo_be
+    printf -v _smb1_nw_out '00%02X%s%s' "$(( hi & 0xFF ))" "${lo_be}" "${smb}"
 }
 
 # smb1::nbt_unwrap <nbt_msg_hex> <var_smb_out>

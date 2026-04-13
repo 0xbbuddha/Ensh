@@ -65,4 +65,24 @@ test::ntlm_flags_default_negotiate() {
     assert::returns_zero ntlm::flags::has "${flags}" "${NTLM_FL_NTLM}"              "default contient NTLM"
     assert::returns_zero ntlm::flags::has "${flags}" "${NTLM_FL_EXTENDED_SESS_SEC}" "default contient EXTENDED_SESS_SEC"
     assert::returns_zero ntlm::flags::has "${flags}" "${NTLM_FL_128BIT}"            "default contient 128BIT"
+    assert::returns_zero ntlm::flags::has "${flags}" "${NTLM_FL_TARGET_INFO}"       "default contient TARGET_INFO"
+}
+
+test::ntlm_flags_type1_for_signing() {
+    local flags
+    ntlm::flags::type1_for_signing flags 1
+
+    assert::returns_zero ntlm::flags::has "${flags}" "${NTLM_FL_KEY_EXCH}"    "type1 signing contient KEY_EXCH"
+    assert::returns_zero ntlm::flags::has "${flags}" "${NTLM_FL_SIGN}"         "type1 signing contient SIGN"
+    assert::returns_zero ntlm::flags::has "${flags}" "${NTLM_FL_SEAL}"         "type1 signing contient SEAL"
+    assert::returns_zero ntlm::flags::has "${flags}" "${NTLM_FL_ALWAYS_SIGN}"  "type1 signing contient ALWAYS_SIGN"
+}
+
+test::ntlm_flags_type3_from_challenge() {
+    local type1="358288E0"      # impacket getNTLMSSPType1(..., signingRequired=True)
+    local chall="058289E2"
+    local out
+
+    ntlm::flags::type3_from_challenge "${type1}" "${chall}" out
+    assert::equal "${out}" "058288E0" "type3 flags alignés sur impacket"
 }
