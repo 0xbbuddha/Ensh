@@ -120,7 +120,7 @@ if ! smb::session::login "${sess}" "${USER}" "${DOMAIN}" "${PASS}"; then
     smb::session::disconnect "${sess}"
     exit 1
 fi
-_ok "Authentifié.\n"
+_ok "Authentifié."
 
 # ── Énumération via SRVSVC ────────────────────────────────────────────────────
 
@@ -144,7 +144,11 @@ _ok "BIND OK.\n"
 
 _info "NetrShareEnum en cours..."
 declare -a shares=()
-if ! srvsvc::net_share_enum "${sess}" "${file_id}" "${HOST}" shares; then
+declare _srv_enum
+# Même nom que pour le TREE_CONNECT IPC$ (NetBIOS si le serveur l’exige)
+_srv_enum="${HOST}"
+[[ -n "${_SMB_NETR_ENUM_NAME[${sess}]:-}" ]] && _srv_enum="${_SMB_NETR_ENUM_NAME[${sess}]}"
+if ! srvsvc::net_share_enum "${sess}" "${file_id}" "${_srv_enum}" shares; then
     _err "NetrShareEnum échoué"
     smb::session::close_pipe "${sess}" "${file_id}"
     smb::session::disconnect "${sess}"
@@ -153,7 +157,7 @@ fi
 
 # ── Affichage des résultats ───────────────────────────────────────────────────
 
-local -i total="${#shares[@]}"
+declare -i total="${#shares[@]}"
 printf ' %-25s  %-12s  %s\n' "PARTAGE" "TYPE" "COMMENTAIRE"
 printf ' %s\n' "─────────────────────────────────────────────────────────"
 
@@ -163,8 +167,8 @@ declare -a other_shares=()
 
 for entry in "${shares[@]}"; do
     IFS=':' read -r name type_int comment <<< "${entry}"
-    local type_str; type_str="$(_share_type_str "${type_int}")"
-    local base_type=$(( type_int & 0x0FFFFFFF ))
+    type_str="$(_share_type_str "${type_int}")"
+    base_type=$(( type_int & 0x0FFFFFFF ))
 
     printf ' \033[32m%-25s\033[0m  %-12s  %s\n' "${name}" "${type_str}" "${comment}"
 

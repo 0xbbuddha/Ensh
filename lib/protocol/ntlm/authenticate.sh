@@ -38,6 +38,7 @@ ensh::import crypto/nt_hash
 ensh::import crypto/hmac_md5
 ensh::import crypto/rc4
 ensh::import encoding/utf16
+ensh::import protocol/ntlm/challenge
 ensh::import protocol/ntlm/flags
 
 readonly _NTLM_AUTH_SIG="4E544C4D53535000"
@@ -140,10 +141,14 @@ ntlm::auth::compute_ntv2_response() {
 #                           <target_info_hex>
 #                           [flags_hex] [client_challenge_hex] [timestamp_hex]
 #                           [var_exported_session_key_out]
+#                           [negotiate_msg_hex] [challenge_msg_hex]
 #
 # Construit un message NTLM Authenticate (NTLMv2).
+# Si NEGOTIATE_VERSION : champ Version (8 o) + MIC (16 o) après les flags ; MIC requis par MS-NLMP
+# lorsque TargetInfo est présent dans le Challenge (SMB domaine) :
+#   MIC = HMAC-MD5(SessionBaseKey, Type1 || Type2 || Type3_avec_MIC_à_zéro).
+# Les messages Type 1 et 2 bruts doivent être passés en args 12 et 13.
 # Si KEY_EXCH est actif dans les flags, calcule et inclut l'EncryptedRandomSessionKey.
-# Exporte l'ExportedSessionKey via <var_exported_session_key_out> si fourni.
 ntlm::authenticate::build() {
     local -n _ntlm_auth_out="$1"
     local username="$2"
@@ -156,6 +161,8 @@ ntlm::authenticate::build() {
     local client_challenge="${9:-}"
     local timestamp="${10:-}"
     local _ntlm_esk_varname="${11:-}"
+    local negotiate_hex="${12:-}"
+    local challenge_hex="${13:-}"
 
     # Flags par défaut
     if [[ -z "${flags_hex}" ]]; then
@@ -174,6 +181,23 @@ ntlm::authenticate::build() {
         fi
     fi
 
+    # MsvAvTargetName = cifs/<FQDN> : requis sur certains DC (validation SPN / NTLM)
+    # — cf. impacket ntlm.py (sinon ACCESS_DENIED SMB2 signé après auth réussie).
+    if [[ -n "${target_info}" ]]; then
+        local _ti_spn_fixed
+        ntlm::challenge::target_info_inject_cifs_spn "${target_info}" _ti_spn_fixed
+        target_info="${_ti_spn_fixed}"
+    fi
+
+    # Réutiliser l'horodatage du serveur si présent dans TargetInfo, comme impacket.
+    if [[ -z "${timestamp}" && -n "${target_info}" ]]; then
+        local -A _auth_ti
+        ntlm::challenge::parse_target_info "${target_info}" _auth_ti || true
+        if [[ -n "${_auth_ti[timestamp]:-}" ]]; then
+            timestamp="${_auth_ti[timestamp]}"
+        fi
+    fi
+
     # Calculer la réponse NTLMv2 + récupérer ResponseKeyNT pour SessionBaseKey
     local nt_proof ntv2_blob _response_key_nt
     ntlm::auth::compute_ntv2_response \
@@ -184,20 +208,29 @@ ntlm::authenticate::build() {
 
     local nt_response="${nt_proof}${ntv2_blob}"
 
-    # LM response : pour NTLMv2 c'est client_challenge || 00*16
-    local lm_response="${client_challenge}0000000000000000"
+    # LMv2 response = HMAC(ResponseKeyNT, ServerChallenge || ClientChallenge) || ClientChallenge
+    local lm_v2_proof lm_response
+    hmac_md5::compute "${_response_key_nt}" "${server_challenge}${client_challenge}" lm_v2_proof
+    lm_response="${lm_v2_proof}${client_challenge}"
 
-    # ── KEY_EXCH : ExportedSessionKey + EncryptedRandomSessionKey ─────────────
-    # SessionBaseKey = HMAC-MD5(ResponseKeyNT, NTProofStr)  (MS-NLMP §3.4.5.1)
-    # ExportedSessionKey = NONCE(16)
-    # EncryptedRandomSessionKey = RC4(SessionBaseKey, ExportedSessionKey)
+    # SessionBaseKey = HMAC-MD5(ResponseKeyNT, NTProofStr) — MIC + KEY_EXCH (MS-NLMP §3.4.5.1)
     local exported_session_key="" encrypted_session_key="" session_base_key=""
+    hmac_md5::compute "${_response_key_nt}" "${nt_proof}" session_base_key
+
     local -i _has_key_exch=0
     local _flags_int; ntlm::flags::from_le32 "${flags_hex}" _flags_int
     (( _flags_int & NTLM_FL_KEY_EXCH )) && _has_key_exch=1
 
+    local -i _has_ver=0
+    (( _flags_int & NTLM_FL_VERSION )) && _has_ver=1
+
+    local -i _need_mic=0
+    if (( _has_ver )) && [[ -n "${target_info}" && -n "${negotiate_hex}" && -n "${challenge_hex}" ]]; then
+        _need_mic=1
+    fi
+
+    # ── KEY_EXCH : ExportedSessionKey + EncryptedRandomSessionKey ─
     if (( _has_key_exch )); then
-        hmac_md5::compute "${_response_key_nt}" "${nt_proof}" session_base_key
 
         # Générer ExportedSessionKey aléatoire (16 octets)
         if [[ -r /dev/urandom ]]; then
@@ -238,8 +271,9 @@ ntlm::authenticate::build() {
     local -i esk_len=0
     (( _has_key_exch )) && esk_len=16
 
-    # Calcul des offsets (header = 72 octets avec Version, sans MIC)
-    local -i base_offset=72
+    # Début des blobs : 64 + (8 Version + 16 MIC si VERSION)
+    local -i base_offset=64
+    (( _has_ver )) && base_offset=88
     local -i lm_off="${base_offset}"
     local -i nt_off=$(( lm_off + lm_len ))
     local -i dom_off=$(( nt_off + nt_len ))
@@ -269,7 +303,10 @@ ntlm::authenticate::build() {
     buf+="$(_ntlm_field "${esk_len}" "${esk_off}")"   # EncryptedRandomSessionKey
 
     buf+="${flags_hex}"                 # NegotiateFlags
-    buf+="0A00414B0000000F"             # Version : Windows 10.0.19041
+    if (( _has_ver )); then
+        buf+="0A00414B0000000F"         # Version
+        buf+="00000000000000000000000000000000"  # MIC (calculé si _need_mic)
+    fi
 
     # ── Payload ───────────────────────────────────────────────────────────────
     buf+="${lm_response}"
@@ -279,7 +316,18 @@ ntlm::authenticate::build() {
     buf+="${workstation_utf16}"
     (( _has_key_exch )) && buf+="${encrypted_session_key}"
 
-    _ntlm_auth_out="${buf^^}"
+    buf="${buf^^}"
+
+    if (( _need_mic )); then
+        local _concat="${negotiate_hex^^}${challenge_hex^^}${buf}"
+        local _mic
+        hmac_md5::compute "${session_base_key}" "${_concat}" _mic || return 1
+        # MIC à l’offset 68 (16 o) : 60 o d’en-tête + 8 o Version → 136 nibbles
+        buf="${buf:0:136}${_mic:0:32}${buf:168}"
+        log::debug "ntlm::auth : MIC OK (${_mic:0:8}...)"
+    fi
+
+    _ntlm_auth_out="${buf}"
 }
 
 # ntlm::authenticate::parse <hex_msg> <var_out_dict>

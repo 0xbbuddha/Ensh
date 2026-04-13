@@ -18,7 +18,7 @@
 #   32       4      ProcessId     : ID processus (ou AsyncId lo pour async)
 #   36       4      TreeId        : identifiant de partage (LE32)
 #   40       8      SessionId     : identifiant de session (LE64)
-#   48      16      Signature     : HMAC-SHA256 (16 octets, 0 si non signé)
+#   48      16      Signature     : 16 octets (HMAC SMB 2.x ou CMAC SMB 3.x — voir smb2/signing, smb3/signing)
 #
 # Après l'en-tête : corps de la commande (StructureSize variable selon cmd)
 #
@@ -99,6 +99,10 @@ readonly SMB2_DIALECT_302=0x0302    # SMB 3.0.2 — Windows 8.1/2012R2
 readonly SMB2_PROTO_SIG="FE534D42"  # 0xFE 'S' 'M' 'B'
 readonly SMB2_HEADER_SIZE=64
 
+# Crédits : SESSION_SETUP / première phase → 1 ; après negotiate, clients usuels demandent 127 (impacket sendSMB).
+readonly SMB2_CREDIT_REQUEST_SESSION=1
+readonly SMB2_CREDIT_REQUEST_LARGE=127
+
 # ── Construction de l'en-tête ─────────────────────────────────────────────────
 
 # smb2::header::build <var_out> <cmd_int> <msg_id_int> <session_id_hex16>
@@ -144,7 +148,7 @@ smb2::header::build() {
     _smb2_hb_out+="${flags_le}"            # [16-19] Flags
     _smb2_hb_out+="00000000"               # [20-23] NextCommand = 0
     _smb2_hb_out+="${msg_id_le}"           # [24-31] MessageId
-    _smb2_hb_out+="00000000"              # [32-35] ProcessId = 0
+    _smb2_hb_out+="00000000"               # [32-35] ProcessId = 0
     _smb2_hb_out+="${tree_id_le}"          # [36-39] TreeId
     _smb2_hb_out+="${session_id_hex}"      # [40-47] SessionId (16 nibbles LE)
     _smb2_hb_out+="$(printf '%032d' 0)"    # [48-63] Signature = 0 (16 octets)
@@ -187,7 +191,10 @@ smb2::nbt_wrap() {
     local smb="${1^^}"
     local -n _smb2_nw_out="$2"
     local -i plen=$(( ${#smb} / 2 ))
-    local len_be
-    endian::be16 "${plen}" len_be
-    _smb2_nw_out="0000${len_be}${smb}"
+    # NetBIOS session message : 0x00 | (length>>16) | length_low (BE16) — aligné impacket / MS-SMB2
+    local -i hi=$(( plen >> 16 ))
+    local -i lo=$(( plen & 0xFFFF ))
+    local lo_be
+    endian::be16 "${lo}" lo_be
+    printf -v _smb2_nw_out '00%02X%s%s' "$(( hi & 0xFF ))" "${lo_be}" "${smb}"
 }

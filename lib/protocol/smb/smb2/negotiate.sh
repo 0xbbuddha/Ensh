@@ -55,7 +55,10 @@ readonly SMB2_CLIENT_CAPS=$(( SMB2_CAP_DFS | SMB2_CAP_LARGE_MTU ))
 # smb2::negotiate::build_request <var_out> [msg_id]
 #
 # Construit un SMB2 NEGOTIATE complet avec framing NBT.
-# Propose les dialectes 2.0.2, 2.1, 3.0, 3.0.2.
+# Par défaut : dialectes 2.0.2 et 2.1 seulement (signature HMAC-SHA256, pas AES-CMAC 3.x) —
+# meilleure interop avec les piles qui négocient 3.x tout en restant sensibles aux détails
+# de longueur / compound sur les réponses signées.
+# Pour proposer aussi 3.0 / 3.0.2 : ENSH_SMB_NEGOTIATE_SMB3=1
 smb2::negotiate::build_request() {
     local -n _smb2_neg_req_out="$1"
     local -i msg_id="${2:-0}"
@@ -69,11 +72,15 @@ smb2::negotiate::build_request() {
 
     # ── Dialectes ─────────────────────────────────────────────────────────────
     local _d dialects=""
-    for _d in ${SMB2_DIALECT_202} ${SMB2_DIALECT_210} ${SMB2_DIALECT_300} ${SMB2_DIALECT_302}; do
+    local -a _dialect_list=( "${SMB2_DIALECT_202}" "${SMB2_DIALECT_210}" )
+    if [[ "${ENSH_SMB_NEGOTIATE_SMB3:-}" == "1" ]]; then
+        _dialect_list+=( "${SMB2_DIALECT_300}" "${SMB2_DIALECT_302}" )
+    fi
+    for _d in "${_dialect_list[@]}"; do
         local _d_le; endian::le16 "${_d}" _d_le
         dialects+="${_d_le}"
     done
-    local -i dialect_count=4
+    local -i dialect_count="${#_dialect_list[@]}"
 
     # ── Corps fixe ────────────────────────────────────────────────────────────
     local dc_le sec_le caps_le

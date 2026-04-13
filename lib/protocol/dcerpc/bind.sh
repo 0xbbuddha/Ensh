@@ -211,6 +211,12 @@ dcerpc::bind::parse_ack() {
     local pdu="${1^^}"
     local -n _dcerpc_ba_dict="$2"
 
+    local -i _pdu_bytes=$(( ${#pdu} / 2 ))
+    if (( _pdu_bytes < 28 )); then
+        log::error "dcerpc::bind : PDU BIND_ACK trop court (${_pdu_bytes}B)"
+        return 1
+    fi
+
     # En-tête : 16 octets
     local -i pkt_type=$(( 16#${pdu:4:2} ))
     _dcerpc_ba_dict[pkt_type]="${pkt_type}"
@@ -228,23 +234,31 @@ dcerpc::bind::parse_ack() {
 
     endian::read_le32 "${pdu}" 12 _dcerpc_ba_dict[call_id]
     endian::read_le16 "${pdu}" 18 _dcerpc_ba_dict[max_recv]
+    endian::read_le32 "${pdu}" 20 _dcerpc_ba_dict[assoc_grp]
 
-    # Byte 20-23 : SecondaryAddr (variable) — on cherche NumResults
+    # BIND_ACK:
+    #   20-23 : AssocGroupId
+    #   24-25 : SecondaryAddrLen
+    #   26..  : SecondaryAddr + padding 4B
+    #   ...   : p_result_list_t
     # SecondaryAddr : LE16 longueur + string null-terminated
-    endian::read_le16 "${pdu}" 20 _dcerpc_ba_sec_len
+    endian::read_le16 "${pdu}" 24 _dcerpc_ba_sec_len
     local -i _sec_len="${_dcerpc_ba_sec_len}"
-    # Aligner sur 4 octets : offset après SecondaryAddr
-    local -i _sec_end=$(( 22 + _sec_len ))
+    local -i _sec_end=$(( 26 + _sec_len ))
     local -i _aligned=$(( (_sec_end + 3) & ~3 ))
 
-    # AssocGroupId : 4 octets à _aligned
-    endian::read_le32 "${pdu}" "${_aligned}" _dcerpc_ba_dict[assoc_grp]
-    local -i _results_off=$(( _aligned + 4 ))
+    if (( ${#pdu} < ((_aligned + 28) * 2) )); then
+        log::error "dcerpc::bind : p_result_list_t tronqué"
+        return 1
+    fi
 
-    # NumResults : LE16
-    endian::read_le16 "${pdu}" "${_results_off}" _dcerpc_ba_num
-    # Result du premier contexte : LE16 à _results_off+2+2 (après NumResults+Align)
-    local -i _res_off=$(( _results_off + 4 ))
+    local -i _num_results=$(( 16#${pdu:$((_aligned * 2)):2} ))
+    if (( _num_results < 1 )); then
+        log::error "dcerpc::bind : aucun contexte retourné"
+        return 1
+    fi
+
+    local -i _res_off=$(( _aligned + 4 ))
     endian::read_le16 "${pdu}" "${_res_off}" _dcerpc_ba_dict[result]
 
     if (( _dcerpc_ba_dict[result] != DCERPC_RESULT_ACCEPT )); then

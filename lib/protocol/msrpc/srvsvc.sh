@@ -44,6 +44,7 @@ ensh::import core/log
 ensh::import encoding/utf16
 ensh::import protocol/dcerpc/bind
 ensh::import protocol/dcerpc/request
+ensh::import protocol/smb/smb2/header
 
 # ── Constantes SRVSVC ─────────────────────────────────────────────────────────
 
@@ -58,24 +59,29 @@ readonly SRVSVC_SHARE_TYPE_SPECIAL=0x80000000  # bit31 = caché (C$, ADMIN$...)
 
 # ── Helpers NDR32 ─────────────────────────────────────────────────────────────
 
-# ndr::wstr <var_out> <string>
+# ndr::wstr <var_out> <string> [null_terminated_int]
 #
-# Encode une chaîne en NDR32 WCHAR* unique pointer :
-#   ReferentId (4B) + MaxCount (4B) + Offset (4B) + ActualCount (4B) + UTF-16LE data + padding
-# Le ReferentId est un compteur croissant simulé (0x00020000).
+# Encode le référent NDR32 d'une chaîne WCHAR* :
+#   MaxCount (4B) + Offset (4B) + ActualCount (4B) + UTF-16LE data + padding
 _SRVSVC_REF_ID=0x00020000
 
 ndr::wstr() {
     local -n _ndr_wstr_out="$1"
     local str="$2"
+    local -i with_nul="${3:-0}"
 
     local utf16
     utf16::encode_le "${str}" utf16
     local -i char_count=$(( ${#utf16} / 4 ))  # nombre de caractères UTF-16 (2B chacun)
+
+    if (( with_nul != 0 )); then
+        utf16+="0000"
+        (( char_count++ ))
+    fi
+
     local -i byte_count=$(( ${#utf16} / 2 ))
 
-    local ref_le count_le offset_le
-    endian::le32 "${_SRVSVC_REF_ID}"  ref_le
+    local count_le offset_le
     endian::le32 "${char_count}"       count_le
     endian::le32 0                     offset_le
 
@@ -84,24 +90,22 @@ ndr::wstr() {
     local padding
     printf -v padding '%0*d' $(( pad * 2 )) 0
 
-    _ndr_wstr_out="${ref_le}${count_le}${offset_le}${count_le}${utf16}${padding}"
-    (( _SRVSVC_REF_ID++ ))
+    _ndr_wstr_out="${count_le}${offset_le}${count_le}${utf16}${padding}"
 }
 
-# ndr::wstr_ptr <var_out> <string>
+# ndr::wstr_ptr <var_out>
 #
 # Encode un pointeur WCHAR* unique (seulement le ReferentId).
-# Les données réelles doivent être ajoutées séparément après tous les pointeurs.
 ndr::wstr_ptr() {
     local -n _ndr_wsptr_out="$1"
     endian::le32 "${_SRVSVC_REF_ID}" _ndr_wsptr_out
     (( _SRVSVC_REF_ID++ ))
 }
 
-# ndr::read_wstr <hex_stub> <offset_nibbles> <var_str_out> <var_next_offset_out>
+# ndr::read_wstr <hex_stub> <offset_bytes> <var_str_out> <var_next_offset_out>
 #
 # Lit une chaîne NDR32 WCHAR* (MaxCount + Offset + ActualCount + data + padding).
-# Retourne la chaîne décodée et l'offset suivant (en nibbles).
+# Retourne la chaîne décodée et l'offset suivant (en octets).
 ndr::read_wstr() {
     local stub="${1^^}"
     local -i off="$2"
@@ -110,23 +114,22 @@ ndr::read_wstr() {
 
     # MaxCount (4B)
     endian::read_le32 "${stub}" "${off}" _ndr_rw_max
-    (( off += 8 ))  # +4 octets
+    (( off += 4 ))
     # Offset (4B)
-    (( off += 8 ))  # +4 octets (ignoré)
+    (( off += 4 ))
     # ActualCount (4B)
     endian::read_le32 "${stub}" "${off}" _ndr_rw_cnt
-    (( off += 8 ))
+    (( off += 4 ))
     local -i char_count="${_ndr_rw_cnt}"
     local -i byte_count=$(( char_count * 2 ))
-    local -i nibble_count=$(( byte_count * 2 ))
 
     # Données UTF-16LE
-    local utf16_hex="${stub:${off}:${nibble_count}}"
-    (( off += nibble_count ))
+    local utf16_hex="${stub:$(( off * 2 )):$(( byte_count * 2 ))}"
+    (( off += byte_count ))
 
     # Padding aligné sur 4 octets
     local -i pad=$(( (4 - (byte_count % 4)) % 4 ))
-    (( off += pad * 2 ))
+    (( off += pad ))
 
     # Décoder UTF-16LE → ASCII/UTF-8
     utf16::decode_le "${utf16_hex}" _ndr_rw_str
@@ -150,7 +153,7 @@ srvsvc::bind() {
         1
 
     local ioctl_req
-    local -i mid tid
+    local -i mid tid _dfs_h=0
     smb2::_next_msg_id "${_sess}" mid
     tid="${_SMB_TREE_IPC[${_sess}]:-0}"
 
@@ -160,7 +163,9 @@ srvsvc::bind() {
         "${bind_pdu}" \
         "${mid}" \
         "${_SMB_SESSION_ID[${_sess}]}" \
-        "${tid}"
+        "${tid}" \
+        "${SMB2_IOCTL_MAX_OUTPUT}" \
+        "${_dfs_h}"
 
     smb::_send "${_sess}" "${ioctl_req}" || return 1
 
@@ -176,6 +181,40 @@ srvsvc::bind() {
     log::info "srvsvc : BIND OK — assoc_grp=${ack[assoc_grp]}"
 }
 
+# srvsvc::_build_net_share_enum_stub <server_name> <var_out>
+#
+# Construit le stub NDR32 de NetrShareEnum niveau 1.
+srvsvc::_build_net_share_enum_stub() {
+    local server_name="$1"
+    local -n _srvsvc_stub_out="$2"
+
+    _SRVSVC_REF_ID=0x00020000
+
+    # ServerName : pointeur référent + données "\\\\server\\0"
+    local srv_ptr srv_data
+    ndr::wstr_ptr srv_ptr
+    ndr::wstr srv_data "\\\\${server_name}" 1
+
+    local level_le ctr_ptr ctr_count_le pref_le resume_le
+    endian::le32 1 level_le
+    endian::le32 "${_SRVSVC_REF_ID}" ctr_ptr
+    (( _SRVSVC_REF_ID++ ))
+    endian::le32 0 ctr_count_le
+    endian::le32 0xFFFFFFFF pref_le
+    endian::le32 0 resume_le
+
+    _srvsvc_stub_out=""
+    _srvsvc_stub_out+="${srv_ptr}"
+    _srvsvc_stub_out+="${srv_data}"
+    _srvsvc_stub_out+="${level_le}"
+    _srvsvc_stub_out+="${level_le}"
+    _srvsvc_stub_out+="${ctr_ptr}"
+    _srvsvc_stub_out+="${ctr_count_le}"
+    _srvsvc_stub_out+="00000000"
+    _srvsvc_stub_out+="${pref_le}"
+    _srvsvc_stub_out+="${resume_le}"
+}
+
 # ── NetrShareEnum ─────────────────────────────────────────────────────────────
 
 # srvsvc::net_share_enum <sess> <file_id_hex32> <server_name> <var_list_out>
@@ -188,61 +227,15 @@ srvsvc::net_share_enum() {
     local server_name="$3"
     local -n _srvsvc_nse_out="$4"
 
-    _SRVSVC_REF_ID=0x00020000
-
-    # ── Construction du stub NDR32 ────────────────────────────────────────────
-    #
-    # NetrShareEnum(
-    #   ServerName   : [unique] WCHAR* → \\server
-    #   InfoStruct   : SHARE_ENUM_STRUCT { Level=1, ShareInfo={Ctr=NULL} }
-    #   PrefMaxLen   : DWORD = 0xFFFFFFFF
-    #   ResumeHandle : [unique] DWORD* → NULL
-    # )
-
-    # ServerName : pointeur référent + données
-    local srv_ptr srv_data
-    ndr::wstr_ptr srv_ptr
-    ndr::wstr srv_data "\\\\${server_name}"
-
-    # Level = 1
-    local level_le
-    endian::le32 1 level_le
-
-    # Switch value (= Level, répété dans l'union)
-    # Ctr (LPSHARE_INFO_1_CONTAINER) : pointeur non-nul
-    local ctr_ptr
-    endian::le32 "${_SRVSVC_REF_ID}" ctr_ptr
-    (( _SRVSVC_REF_ID++ ))
-
-    # SHARE_INFO_1_CONTAINER : Count=0, Buffer=NULL (le serveur les remplira)
-    local ctr_count_le
-    endian::le32 0 ctr_count_le
-
-    # PrefMaxLen = 0xFFFFFFFF
-    local pref_le
-    endian::le32 0xFFFFFFFF pref_le
-
-    # ResumeHandle : pointeur NULL
-    local resume_le
-    endian::le32 0 resume_le
-
-    local stub=""
-    stub+="${srv_ptr}"      # ServerName pointer
-    stub+="${level_le}"     # Level = 1
-    stub+="${level_le}"     # Switch value = 1
-    stub+="${ctr_ptr}"      # Ctr pointer
-    stub+="${ctr_count_le}" # Count = 0
-    stub+="00000000"        # Buffer pointer = NULL
-    stub+="${srv_data}"     # ServerName data (déréférencement)
-    stub+="${pref_le}"      # PrefMaxLen
-    stub+="${resume_le}"    # ResumeHandle = NULL
+    local stub
+    srvsvc::_build_net_share_enum_stub "${server_name}" stub
 
     # ── Envoi via DCE/RPC REQUEST ─────────────────────────────────────────────
     local rpc_req
     dcerpc::request::build rpc_req "${SRVSVC_OPNUM_NET_SHARE_ENUM}" "${stub}" 2
 
     local ioctl_req
-    local -i mid tid
+    local -i mid tid _dfs_h=0
     smb2::_next_msg_id "${_sess}" mid
     tid="${_SMB_TREE_IPC[${_sess}]:-0}"
 
@@ -253,7 +246,8 @@ srvsvc::net_share_enum() {
         "${mid}" \
         "${_SMB_SESSION_ID[${_sess}]}" \
         "${tid}" \
-        65536
+        65536 \
+        "${_dfs_h}"
 
     smb::_send "${_sess}" "${ioctl_req}" || return 1
 
@@ -295,18 +289,18 @@ srvsvc::_parse_net_share_enum_resp() {
     local -i off=0
 
     # Level (4B) + Switch (4B) + Ctr ptr (4B)
-    (( off += 24 ))  # 3 * 4 octets * 2 nibbles = 24 nibbles
+    (( off += 12 ))
 
     # Count
     endian::read_le32 "${stub}" "${off}" _srvsvc_count
-    (( off += 8 ))
+    (( off += 4 ))
     local -i count="${_srvsvc_count}"
 
     # Buffer pointer (4B)
-    (( off += 8 ))
+    (( off += 4 ))
 
     # MaxCount (4B) = count
-    (( off += 8 ))
+    (( off += 4 ))
 
     if (( count == 0 )); then
         log::warn "srvsvc : aucun partage retourné"
@@ -322,18 +316,19 @@ srvsvc::_parse_net_share_enum_resp() {
     for (( i = 0; i < count; i++ )); do
         endian::read_le32 "${stub}" "${off}" _srvsvc_nptr
         name_ptrs+=("${_srvsvc_nptr}")
-        (( off += 8 ))
+        (( off += 4 ))
 
         endian::read_le32 "${stub}" "${off}" _srvsvc_type
         types+=("${_srvsvc_type}")
-        (( off += 8 ))
+        (( off += 4 ))
 
         endian::read_le32 "${stub}" "${off}" _srvsvc_rptr
         remark_ptrs+=("${_srvsvc_rptr}")
-        (( off += 8 ))
+        (( off += 4 ))
     done
 
-    # Lire les chaînes déréférencées (dans l'ordre des pointeurs non-nuls)
+    # Lire les chaînes déréférencées dans l'ordre de marshaling NDR :
+    # pour chaque SHARE_INFO_1, netname puis remark.
     local -a names=()
     local -a remarks=()
 
@@ -341,21 +336,19 @@ srvsvc::_parse_net_share_enum_resp() {
         if (( name_ptrs[i] != 0 )); then
             local _name _next_off
             ndr::read_wstr "${stub}" "${off}" _name _next_off
-            names+=("${_name}")
+            names[i]="${_name}"
             off="${_next_off}"
         else
-            names+=("")
+            names[i]=""
         fi
-    done
 
-    for (( i = 0; i < count; i++ )); do
         if (( remark_ptrs[i] != 0 )); then
             local _remark _next_off2
             ndr::read_wstr "${stub}" "${off}" _remark _next_off2
-            remarks+=("${_remark}")
+            remarks[i]="${_remark}"
             off="${_next_off2}"
         else
-            remarks+=("")
+            remarks[i]=""
         fi
     done
 

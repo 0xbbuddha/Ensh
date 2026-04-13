@@ -67,7 +67,7 @@ readonly SMB2_IOCTL_MAX_OUTPUT=4096
 
 # smb2::ioctl::build_request <var_out> <ctl_code_int> <file_id_hex32>
 #                             <input_hex> <msg_id_int> <session_id_hex16>
-#                             <tree_id_int> [max_output_int]
+#                             <tree_id_int> [max_output_int] [header_flags_int]
 #
 # Construit un SMB2 IOCTL complet avec données input.
 # <file_id_hex32> : 32 nibbles hex = FileId Persistent(8B) + Volatile(8B)
@@ -81,12 +81,13 @@ smb2::ioctl::build_request() {
     local session_id="${6:-0000000000000000}"
     local -i tree_id="${7:-0}"
     local -i max_output="${8:-${SMB2_IOCTL_MAX_OUTPUT}}"
+    local -i hdr_flags="${9:-0}"
 
     # ── En-tête SMB2 ─────────────────────────────────────────────────────────
     local hdr
     smb2::header::build hdr \
         "${SMB2_CMD_IOCTL}" "${msg_id}" \
-        "${session_id}" "${tree_id}" 0 0 1 1
+        "${session_id}" "${tree_id}" 0 "${hdr_flags}" "${SMB2_CREDIT_REQUEST_LARGE}" 1
 
     # ── Corps IOCTL ───────────────────────────────────────────────────────────
     # InputOffset = 64 (header) + 56 (corps fixe sans input) = 120

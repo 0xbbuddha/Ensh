@@ -73,9 +73,12 @@ ntlm::negotiate::build() {
     local -i domain_len=$(( ${#domain_hex} / 2 ))
     local -i workstation_len=$(( ${#workstation_hex} / 2 ))
 
-    # Le payload commence après le header fixe de 40 octets
-    # (Signature 8 + MessageType 4 + NegotiateFlags 4 + DomainFields 8 + WorkstationFields 8 + Version 8)
-    local -i header_size=40
+    local -i flags_int=0
+    ntlm::flags::from_le32 "${flags_hex}" flags_int
+
+    # Sig 8 + Type 4 + Flags 4 + DomainFields 8 + WorkstationFields 8 [+ Version 8]
+    local -i header_size=32
+    (( flags_int & NTLM_FL_VERSION )) && header_size=40
     local -i domain_offset="${header_size}"
     local -i workstation_offset=$(( header_size + domain_len ))
 
@@ -85,8 +88,6 @@ ntlm::negotiate::build() {
     local msgtype; endian::le32 1 msgtype
     buf+="${msgtype}"                                    # MessageType (4 octets)
 
-    local flags_le; endian::swap "${flags_hex}" flags_le
-    # Les flags sont déjà en LE dans ntlm::flags
     buf+="${flags_hex}"                                  # NegotiateFlags (4 octets)
 
     # DomainNameFields : Len (2), MaxLen (2), Offset (4) — tout en LE
@@ -99,9 +100,9 @@ ntlm::negotiate::build() {
     local woff_le; endian::le32 "${workstation_offset}" woff_le
     buf+="${wlen_le}${wlen_le}${woff_le}"               # WorkstationFields (8 octets)
 
-    # Version (8 octets) — on indique Windows 10 (10.0.19041)
-    # MajorVersion=10, MinorVersion=0, BuildNumber=19041, NTLMRevisionCurrent=15
-    buf+="0A00414B0000000F"
+    if (( flags_int & NTLM_FL_VERSION )); then
+        buf+="0A00414B0000000F"                         # Version (8 octets)
+    fi
 
     # ── Payload ───────────────────────────────────────────────────────────────
     buf+="${domain_hex}"

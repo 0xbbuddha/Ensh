@@ -107,6 +107,7 @@ if [[ "${1:-}" == "--all" ]]; then
         protocol/smb/smb2/session_setup \
         protocol/smb/smb2/tree_connect  \
         protocol/smb/smb2/ioctl         \
+        protocol/smb/smb3/signing       \
         protocol/smb/smb2/signing       \
         protocol/smb/session            \
         protocol/dcerpc/bind            \

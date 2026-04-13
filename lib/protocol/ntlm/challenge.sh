@@ -18,7 +18,7 @@
 #
 # Référence : MS-NLMP §2.2.1.2
 #
-# Dépendances : core/hex, core/bytes, core/endian, protocol/ntlm/flags
+# Dépendances : core/hex, core/bytes, core/endian, core/log, encoding/utf16, protocol/ntlm/flags
 #
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -29,6 +29,7 @@ ensh::import core/hex
 ensh::import core/bytes
 ensh::import core/endian
 ensh::import core/log
+ensh::import encoding/utf16
 ensh::import protocol/ntlm/flags
 
 # Signature NTLM (partagée avec negotiate.sh mais déclarée localement pour l'autonomie)
@@ -131,6 +132,69 @@ ntlm::challenge::parse_target_info() {
 
         (( off += 4 + avlen ))
     done
+}
+
+# ntlm::challenge::target_info_inject_cifs_spn <target_info_hex> <var_out_hex>
+#
+# Réinsère une liste AvPair sans MsvAvTargetName (9), puis ajoute
+#   MsvAvTargetName = UTF-16LE("cifs/") || MsvAvDnsComputerName
+# avant MsvAvEOL. Aligné sur impacket (NTLM) pour les serveurs avec validation SPN
+# (« Restrict NTLM » / cible SPN) — sinon SMB2 peut répondre ACCESS_DENIED aux requêtes
+# signées (ex. TREE_CONNECT) malgré SESSION_SETUP SUCCESS.
+ntlm::challenge::target_info_inject_cifs_spn() {
+    local ti="${1^^}"
+    local -n _ntlm_spn_ti_out="$2"
+
+    if [[ -z "${ti}" ]]; then
+        _ntlm_spn_ti_out=""
+        return 0
+    fi
+
+    declare -A _spn_ti
+    ntlm::challenge::parse_target_info "${ti}" _spn_ti || {
+        _ntlm_spn_ti_out="${ti}"
+        return 0
+    }
+
+    local dns_hex="${_spn_ti[dns_computer]:-}"
+    [[ -z "${dns_hex}" ]] && dns_hex="${_spn_ti[nb_computer]:-}"
+    if [[ -z "${dns_hex}" ]]; then
+        _ntlm_spn_ti_out="${ti}"
+        return 0
+    fi
+
+    local cifs_pre
+    utf16::encode_le "cifs/" cifs_pre
+    local spn_hex="${cifs_pre}${dns_hex}"
+    local -i spn_b=$(( ${#spn_hex} / 2 ))
+
+    local out="" _spn_off=0
+    local -i _spn_ti_len=$(( ${#ti} / 2 ))
+    while (( _spn_off + 4 <= _spn_ti_len )); do
+        local -i _avid _avlen
+        endian::read_le16 "${ti}" "${_spn_off}" _avid
+        endian::read_le16 "${ti}" "$(( _spn_off + 2 ))" _avlen
+        (( _avid == NTLM_AVID_EOL )) && break
+        if (( _avid != NTLM_AVID_TARGET_NAME )); then
+            local _v
+            hex::slice "${ti}" "$(( _spn_off + 4 ))" "${_avlen}" _v
+            local _idl _ll
+            endian::le16 "${_avid}" _idl
+            endian::le16 "${_avlen}" _ll
+            out+="${_idl}${_ll}${_v}"
+        fi
+        (( _spn_off += 4 + _avlen ))
+    done
+
+    local _tn_id_le _tn_len_le
+    endian::le16 "${NTLM_AVID_TARGET_NAME}" _tn_id_le
+    endian::le16 "${spn_b}" _tn_len_le
+    out+="${_tn_id_le}${_tn_len_le}${spn_hex}"
+    out+="00000000"
+
+    _ntlm_spn_ti_out="${out}"
+    log::debug "ntlm::challenge : TargetInfo — MsvAvTargetName (cifs/ + DNS/NetBIOS) injecté"
+    return 0
 }
 
 # ntlm::challenge::build_target_info <var_out> [nb_domain] [nb_computer] [dns_domain] [dns_computer] [timestamp_hex]
