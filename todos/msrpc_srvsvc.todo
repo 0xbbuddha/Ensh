@@ -5,13 +5,14 @@ Dépend de : dcerpc_request.todo
 MSRPC — SRVSVC (Server Service)
 Énumération des partages réseau via le pipe \srvsvc.
 
-À implémenter :
+Reste à implémenter :
+- srvsvc::net_share_get_info <sess> <share_name> <var_dict_out>
+    OpNum : NetrShareGetInfo = 16
+
+Déjà couvert :
 - srvsvc::net_share_enum <sess> <server_name> <var_list_out>
     OpNum : NetrShareEnum = 15
     Level : 1 (ShareInfo1 : nom + type + commentaire)
-    Encoder/décoder NDR32 (pointeurs, tableaux conformants)
-- srvsvc::net_share_get_info <sess> <share_name> <var_dict_out>
-    OpNum : NetrShareGetInfo = 16
 
 Utilisation attendue :
     smb::session::connect sess 10.0.0.1 admin Pass123
