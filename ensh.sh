@@ -119,3 +119,18 @@ if [[ "${1:-}" == "--all" ]]; then
         protocol/ldap/search            \
         protocol/ldap/session
 fi
+
+# ── Chargement des modules spécifiques ───────────────────────────────────────
+if [[ "${1:-}" == "--smb" ]]; then
+    ensh::import \
+        protocol/smb/session
+fi
+
+if [[ "${1:-}" == "--ldap" ]]; then
+    ensh::import \
+        protocol/ldap/message           \
+        protocol/ldap/filter            \
+        protocol/ldap/bind              \
+        protocol/ldap/search            \
+        protocol/ldap/session
+fi
