@@ -3,7 +3,7 @@
 # lib/protocol/msrpc/srvsvc.sh — MSRPC Server Service (SRVSVC)
 #
 # Permet d'énumérer les partages réseau via le named pipe \srvsvc.
-# Implémente NetrShareEnum (OpNum 15) niveau 1 (nom + type + commentaire).
+# Implémente NetrShareEnum (OpNum 15) et NetrShareGetInfo (OpNum 16).
 #
 # Flux d'utilisation :
 #   1. smb::session::open_pipe sess "\srvsvc" file_id
@@ -49,6 +49,16 @@ ensh::import protocol/smb/smb2/header
 # ── Constantes SRVSVC ─────────────────────────────────────────────────────────
 
 readonly SRVSVC_OPNUM_NET_SHARE_ENUM=15
+readonly SRVSVC_OPNUM_NET_SHARE_GET_INFO=16
+
+readonly SRVSVC_INFO_LEVEL_1=1
+readonly SRVSVC_INFO_LEVEL_2=2
+
+readonly SRVSVC_ERR_SUCCESS=0x00000000
+readonly SRVSVC_ERR_ACCESS_DENIED=0x00000005
+readonly SRVSVC_ERR_INVALID_LEVEL=0x0000007C
+readonly SRVSVC_ERR_NOT_SUPPORTED=0x00000032
+readonly SRVSVC_ERR_NET_NAME_NOT_FOUND=0x00000906
 
 # Types de partages
 readonly SRVSVC_SHARE_TYPE_DISK=0
@@ -215,6 +225,30 @@ srvsvc::_build_net_share_enum_stub() {
     _srvsvc_stub_out+="${resume_le}"
 }
 
+# srvsvc::_build_net_share_get_info_stub <server_name> <share_name> <level_int> <var_out>
+#
+# Construit le stub NDR32 de NetrShareGetInfo.
+srvsvc::_build_net_share_get_info_stub() {
+    local server_name="$1"
+    local share_name="$2"
+    local -i level="${3:-${SRVSVC_INFO_LEVEL_2}}"
+    local -n _srvsvc_sgi_stub_out="$4"
+
+    _SRVSVC_REF_ID=0x00020000
+
+    local srv_ptr srv_data share_data level_le
+    ndr::wstr_ptr srv_ptr
+    ndr::wstr srv_data "\\\\${server_name}" 1
+    ndr::wstr share_data "${share_name}" 1
+    endian::le32 "${level}" level_le
+
+    _srvsvc_sgi_stub_out=""
+    _srvsvc_sgi_stub_out+="${srv_ptr}"
+    _srvsvc_sgi_stub_out+="${srv_data}"
+    _srvsvc_sgi_stub_out+="${share_data}"
+    _srvsvc_sgi_stub_out+="${level_le}"
+}
+
 # ── NetrShareEnum ─────────────────────────────────────────────────────────────
 
 # srvsvc::net_share_enum <sess> <file_id_hex32> <server_name> <var_list_out>
@@ -262,6 +296,75 @@ srvsvc::net_share_enum() {
 
     # ── Parsing du stub de réponse ────────────────────────────────────────────
     srvsvc::_parse_net_share_enum_resp "${rpc_resp[stub]}" _srvsvc_nse_out
+}
+
+# srvsvc::net_share_get_info <sess> <file_id_hex32> <server_name> <share_name> <var_dict_out>
+#
+# Appelle NetrShareGetInfo (OpNum 16). Tente d'abord le niveau 2, puis retombe
+# au niveau 1 si le serveur refuse les détails étendus.
+srvsvc::net_share_get_info() {
+    local _sess="$1"
+    local file_id="$2"
+    local server_name="$3"
+    local share_name="$4"
+    local -n _srvsvc_sgi_out="$5"
+
+    local -a try_levels=("${SRVSVC_INFO_LEVEL_2}" "${SRVSVC_INFO_LEVEL_1}")
+    local -i level
+    for level in "${try_levels[@]}"; do
+        local stub
+        srvsvc::_build_net_share_get_info_stub "${server_name}" "${share_name}" "${level}" stub
+
+        local rpc_req
+        dcerpc::request::build rpc_req "${SRVSVC_OPNUM_NET_SHARE_GET_INFO}" "${stub}" 3
+
+        local ioctl_req
+        local -i mid tid _dfs_h=0
+        smb2::_next_msg_id "${_sess}" mid
+        tid="${_SMB_TREE_IPC[${_sess}]:-0}"
+
+        smb2::ioctl::build_request ioctl_req \
+            "${SMB2_FSCTL_PIPE_TRANSCEIVE}" \
+            "${file_id}" \
+            "${rpc_req}" \
+            "${mid}" \
+            "${_SMB_SESSION_ID[${_sess}]}" \
+            "${tid}" \
+            65536 \
+            "${_dfs_h}"
+
+        smb::_send "${_sess}" "${ioctl_req}" || return 1
+
+        local resp
+        smb::_recv "${_sess}" resp 15 || return 1
+
+        local -A ioctl_resp
+        smb2::ioctl::parse_response "${resp}" ioctl_resp || return 1
+
+        local -A rpc_resp
+        dcerpc::request::parse_response "${ioctl_resp[output]}" rpc_resp || return 1
+
+        srvsvc::_parse_net_share_get_info_resp "${rpc_resp[stub]}" _srvsvc_sgi_out || return 1
+
+        if (( _srvsvc_sgi_out[error_code] == SRVSVC_ERR_SUCCESS )); then
+            log::debug "srvsvc : get_info '${share_name}' niveau=${_srvsvc_sgi_out[level]}"
+            return 0
+        fi
+
+        if (( level == SRVSVC_INFO_LEVEL_2 )) && \
+           (( _srvsvc_sgi_out[error_code] == SRVSVC_ERR_ACCESS_DENIED || \
+              _srvsvc_sgi_out[error_code] == SRVSVC_ERR_INVALID_LEVEL || \
+              _srvsvc_sgi_out[error_code] == SRVSVC_ERR_NOT_SUPPORTED )); then
+            log::debug "srvsvc : get_info '${share_name}' niveau 2 refusé, fallback niveau 1"
+            continue
+        fi
+
+        log::error "srvsvc : get_info '${share_name}' error=0x$(printf '%08X' "${_srvsvc_sgi_out[error_code]}")"
+        return 1
+    done
+
+    log::error "srvsvc : get_info '${share_name}' a échoué pour tous les niveaux"
+    return 1
 }
 
 # srvsvc::_parse_net_share_enum_resp <stub_hex> <var_list_out>
@@ -357,4 +460,111 @@ srvsvc::_parse_net_share_enum_resp() {
     done
 
     log::debug "srvsvc : ${count} partage(s) reçu(s)"
+}
+
+# srvsvc::_parse_net_share_get_info_resp <stub_hex> <var_dict_out>
+#
+# Parse le stub NDR32 retourné par NetrShareGetInfo niveau 1 ou 2.
+srvsvc::_parse_net_share_get_info_resp() {
+    local stub="${1^^}"
+    local -n _srvsvc_sgi_dict="$2"
+
+    _srvsvc_sgi_dict=()
+    _srvsvc_sgi_dict[name]=""
+    _srvsvc_sgi_dict[type]="0"
+    _srvsvc_sgi_dict[remark]=""
+    _srvsvc_sgi_dict[permissions]="0"
+    _srvsvc_sgi_dict[max_uses]="0"
+    _srvsvc_sgi_dict[current_uses]="0"
+    _srvsvc_sgi_dict[path]=""
+    _srvsvc_sgi_dict[passwd]=""
+
+    local -i stub_len=$(( ${#stub} / 2 ))
+    if (( stub_len < 8 )); then
+        log::error "srvsvc : réponse NetrShareGetInfo trop courte"
+        return 1
+    fi
+
+    endian::read_le32 "${stub}" 0 _srvsvc_sgi_dict[level]
+    endian::read_le32 "${stub}" "$(( stub_len - 4 ))" _srvsvc_sgi_dict[error_code]
+
+    local -i info_ptr
+    endian::read_le32 "${stub}" 4 info_ptr
+    (( info_ptr == 0 )) && return 0
+
+    local -i off=8
+    local -i name_ptr remark_ptr path_ptr passwd_ptr
+
+    case "${_srvsvc_sgi_dict[level]}" in
+        ${SRVSVC_INFO_LEVEL_1})
+            endian::read_le32 "${stub}" "${off}" name_ptr
+            (( off += 4 ))
+            endian::read_le32 "${stub}" "${off}" _srvsvc_sgi_dict[type]
+            (( off += 4 ))
+            endian::read_le32 "${stub}" "${off}" remark_ptr
+            (( off += 4 ))
+
+            if (( name_ptr != 0 )); then
+                local _name _next_off
+                ndr::read_wstr "${stub}" "${off}" _name _next_off
+                _srvsvc_sgi_dict[name]="${_name}"
+                off="${_next_off}"
+            fi
+            if (( remark_ptr != 0 )); then
+                local _remark _next_off2
+                ndr::read_wstr "${stub}" "${off}" _remark _next_off2
+                _srvsvc_sgi_dict[remark]="${_remark}"
+                off="${_next_off2}"
+            fi
+            ;;
+
+        ${SRVSVC_INFO_LEVEL_2})
+            endian::read_le32 "${stub}" "${off}" name_ptr
+            (( off += 4 ))
+            endian::read_le32 "${stub}" "${off}" _srvsvc_sgi_dict[type]
+            (( off += 4 ))
+            endian::read_le32 "${stub}" "${off}" remark_ptr
+            (( off += 4 ))
+            endian::read_le32 "${stub}" "${off}" _srvsvc_sgi_dict[permissions]
+            (( off += 4 ))
+            endian::read_le32 "${stub}" "${off}" _srvsvc_sgi_dict[max_uses]
+            (( off += 4 ))
+            endian::read_le32 "${stub}" "${off}" _srvsvc_sgi_dict[current_uses]
+            (( off += 4 ))
+            endian::read_le32 "${stub}" "${off}" path_ptr
+            (( off += 4 ))
+            endian::read_le32 "${stub}" "${off}" passwd_ptr
+            (( off += 4 ))
+
+            if (( name_ptr != 0 )); then
+                local _name2 _next_off3
+                ndr::read_wstr "${stub}" "${off}" _name2 _next_off3
+                _srvsvc_sgi_dict[name]="${_name2}"
+                off="${_next_off3}"
+            fi
+            if (( remark_ptr != 0 )); then
+                local _remark2 _next_off4
+                ndr::read_wstr "${stub}" "${off}" _remark2 _next_off4
+                _srvsvc_sgi_dict[remark]="${_remark2}"
+                off="${_next_off4}"
+            fi
+            if (( path_ptr != 0 )); then
+                local _path _next_off5
+                ndr::read_wstr "${stub}" "${off}" _path _next_off5
+                _srvsvc_sgi_dict[path]="${_path}"
+                off="${_next_off5}"
+            fi
+            if (( passwd_ptr != 0 )); then
+                local _passwd _next_off6
+                ndr::read_wstr "${stub}" "${off}" _passwd _next_off6
+                _srvsvc_sgi_dict[passwd]="${_passwd}"
+                off="${_next_off6}"
+            fi
+            ;;
+
+        *)
+            log::error "srvsvc : niveau GetInfo non supporté (${_srvsvc_sgi_dict[level]})"
+            return 1
+            ;;
+    esac
 }

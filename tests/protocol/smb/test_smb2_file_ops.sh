@@ -5,6 +5,7 @@
 
 ensh::import protocol/smb/smb2/create
 ensh::import protocol/smb/smb2/read
+ensh::import protocol/smb/smb2/write
 ensh::import protocol/smb/smb2/close
 
 test::smb2_create_build_request() {
@@ -17,6 +18,18 @@ test::smb2_create_build_request() {
     assert::equal "${req:136:4}" "3900" "StructureSize CREATE = 57"
     assert::equal "${req:228:4}" "1A00" "NameLength doit refléter 13 caractères UTF-16LE"
     assert::equal "${req:248:28}" "6C006F006F0074005C0066006C00" "le chemin UTF-16LE doit commencer correctement"
+}
+
+test::smb2_create_build_request_empty_name() {
+    local req
+    smb2::create::build_request req "" 8 "0000000000000000" 3 \
+        "${SMB2_FILE_GENERIC_READ}" \
+        "${SMB2_FILE_OPEN}" \
+        "$(( SMB2_FILE_DIRECTORY_FILE | SMB2_FILE_SYNCHRONOUS_IO_NONALERT ))"
+
+    assert::not_empty "${req}" "CREATE racine non vide"
+    assert::equal "${req:224:4}" "0000" "NameOffset = 0 pour un nom vide"
+    assert::equal "${req:228:4}" "0000" "NameLength = 0 pour un nom vide"
 }
 
 test::smb2_create_parse_response() {
@@ -82,6 +95,41 @@ test::smb2_read_parse_response() {
     assert::equal "${parsed[data_len]}" "5" "DataLength lu"
     assert::equal "${parsed[data_remaining]}" "7" "DataRemaining lu"
     assert::equal "${parsed[data]}" "48454C4C4F" "payload lu"
+}
+
+test::smb2_write_build_request() {
+    local req
+    smb2::write::build_request req "00112233445566778899AABBCCDDEEFF" 4096 "48454C4C4F" 12 "0000000000000000" 4
+
+    assert::not_empty "${req}" "WRITE request non vide"
+    assert::equal "${req:0:8}" "00000075" "NBT length WRITE = 117 octets"
+    assert::equal "${req:136:4}" "3100" "StructureSize WRITE = 49"
+    assert::equal "${req:140:4}" "7000" "DataOffset = 112"
+    assert::equal "${req:144:8}" "05000000" "Length WRITE = 5"
+    assert::equal "${req:152:16}" "0010000000000000" "Offset WRITE = 4096"
+    assert::equal "${req:224:8}" "00000000" "Flags WRITE = 0"
+    assert::equal "${req:232:10}" "48454C4C4F" "payload hex présent"
+}
+
+test::smb2_write_parse_response() {
+    local hdr msg
+    smb2::header::build hdr "${SMB2_CMD_WRITE}" 13 "0000000000000000" 4
+
+    msg="${hdr}"
+    msg+="1100"
+    msg+="0000"
+    msg+="05000000"
+    msg+="00000000"
+    msg+="0000"
+    msg+="0000"
+
+    local -A parsed=()
+    smb2::write::parse_response "${msg}" parsed
+
+    assert::equal "${parsed[count]}" "5" "Count WRITE lu"
+    assert::equal "${parsed[remaining]}" "0" "Remaining WRITE lu"
+    assert::equal "${parsed[write_channel_info_offset]}" "0" "WriteChannelInfoOffset lu"
+    assert::equal "${parsed[write_channel_info_length]}" "0" "WriteChannelInfoLength lu"
 }
 
 test::smb2_close_build_request() {

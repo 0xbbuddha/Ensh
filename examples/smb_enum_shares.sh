@@ -30,12 +30,14 @@ ensh::import protocol/msrpc/srvsvc
 
 PORT=445
 TIMEOUT=10
+DETAILS=0
 
 _args=()
 while (( $# > 0 )); do
     case "$1" in
         -p|--port)    PORT="$2";    shift 2 ;;
         -t|--timeout) TIMEOUT="$2"; shift 2 ;;
+        -d|--details) DETAILS=1;    shift ;;
         *) _args+=("$1"); shift ;;
     esac
 done
@@ -50,6 +52,7 @@ if [[ -z "${HOST}" || -z "${DOMAIN}" || -z "${USER}" || -z "${PASS}" ]]; then
     printf '\nOptions :\n'  >&2
     printf '  -p <port>    Port SMB (défaut : 445)\n' >&2
     printf '  -t <sec>     Timeout en secondes\n' >&2
+    printf '  -d           Tente NetrShareGetInfo pour afficher le chemin\n' >&2
     exit 1
 fi
 
@@ -159,8 +162,13 @@ fi
 # ── Affichage des résultats ───────────────────────────────────────────────────
 
 declare -i total="${#shares[@]}"
-printf ' %-25s  %-12s  %s\n' "PARTAGE" "TYPE" "COMMENTAIRE"
-printf ' %s\n' "─────────────────────────────────────────────────────────"
+if (( DETAILS )); then
+    printf ' %-25s  %-12s  %-28s  %s\n' "PARTAGE" "TYPE" "COMMENTAIRE" "CHEMIN"
+    printf ' %s\n' "────────────────────────────────────────────────────────────────────────────────────────"
+else
+    printf ' %-25s  %-12s  %s\n' "PARTAGE" "TYPE" "COMMENTAIRE"
+    printf ' %s\n' "─────────────────────────────────────────────────────────"
+fi
 
 declare -a disk_shares=()
 declare -a ipc_shares=()
@@ -170,8 +178,23 @@ for entry in "${shares[@]}"; do
     IFS=':' read -r name type_int comment <<< "${entry}"
     type_str="$(_share_type_str "${type_int}")"
     base_type=$(( type_int & 0x0FFFFFFF ))
+    path=""
 
-    printf ' \033[32m%-25s\033[0m  %-12s  %s\n' "${name}" "${type_str}" "${comment}"
+    if (( DETAILS )); then
+        declare -A share_info=()
+        if srvsvc::net_share_get_info "${sess}" "${file_id}" "${_srv_enum}" "${name}" share_info; then
+            path="${share_info[path]:-}"
+            [[ -n "${share_info[remark]:-}" ]] && comment="${share_info[remark]}"
+        else
+            _warn "NetrShareGetInfo a échoué pour ${name}"
+        fi
+    fi
+
+    if (( DETAILS )); then
+        printf ' \033[32m%-25s\033[0m  %-12s  %-28s  %s\n' "${name}" "${type_str}" "${comment}" "${path}"
+    else
+        printf ' \033[32m%-25s\033[0m  %-12s  %s\n' "${name}" "${type_str}" "${comment}"
+    fi
 
     case "${base_type}" in
         0) disk_shares+=("${name}") ;;
