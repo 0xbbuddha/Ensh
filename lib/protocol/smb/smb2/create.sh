@@ -24,11 +24,16 @@ readonly SMB2_IMPERSONATION_IMPERSONATION=0x00000002
 readonly SMB2_IMPERSONATION_DELEGATE=0x00000003
 
 readonly SMB2_FILE_READ_DATA=0x00000001
+readonly SMB2_FILE_WRITE_DATA=0x00000002
+readonly SMB2_FILE_APPEND_DATA=0x00000004
 readonly SMB2_FILE_READ_EA=0x00000008
+readonly SMB2_FILE_WRITE_EA=0x00000010
 readonly SMB2_FILE_READ_ATTRIBUTES=0x00000080
+readonly SMB2_FILE_WRITE_ATTRIBUTES=0x00000100
 readonly SMB2_READ_CONTROL=0x00020000
 readonly SMB2_SYNCHRONIZE=0x00100000
 readonly SMB2_FILE_GENERIC_READ=0x00120089
+readonly SMB2_FILE_GENERIC_WRITE=0x00120116
 
 readonly SMB2_FILE_SHARE_READ=0x00000001
 readonly SMB2_FILE_SHARE_WRITE=0x00000002
@@ -78,6 +83,9 @@ smb2::create::build_request() {
     utf16::encode_le "${filename}" name_utf16
     local -i name_len=$(( ${#name_utf16} / 2 ))
 
+    local -i name_off=0
+    (( name_len > 0 )) && name_off=120
+
     local imp_le desired_le attrs_le share_le disp_le opts_le name_off_le name_len_le
     endian::le32 "${SMB2_IMPERSONATION_IMPERSONATION}" imp_le
     endian::le32 "${desired_access}" desired_le
@@ -85,7 +93,7 @@ smb2::create::build_request() {
     endian::le32 "${share_access}" share_le
     endian::le32 "${create_disposition}" disp_le
     endian::le32 "${create_options}" opts_le
-    endian::le16 120 name_off_le
+    endian::le16 "${name_off}" name_off_le
     endian::le16 "${name_len}" name_len_le
 
     local body="3900"
