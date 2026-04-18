@@ -33,7 +33,8 @@
 #   ldap::session::disconnect session
 #
 # Dépendances : transport/tcp, protocol/ldap/message,
-#               protocol/ldap/bind, protocol/ldap/search
+#               protocol/ldap/bind, protocol/ldap/search,
+#               protocol/ldap/modify, protocol/ldap/add
 #
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -46,6 +47,8 @@ ensh::import transport/tls
 ensh::import protocol/ldap/message
 ensh::import protocol/ldap/bind
 ensh::import protocol/ldap/search
+ensh::import protocol/ldap/modify
+ensh::import protocol/ldap/add
 
 # ── Registre des sessions ─────────────────────────────────────────────────────
 #
@@ -226,6 +229,73 @@ ldap::session::bind_simple() {
 # Connexion anonyme (lecture seule de la plupart des annuaires).
 ldap::session::bind_anonymous() {
     ldap::session::bind_simple "$1" "" ""
+}
+
+# ldap::session::modify <session> <dn> <op> <attr> [value...]
+#
+# Exécute une seule modification LDAP sur un attribut.
+ldap::session::modify() {
+    local session="$1"
+    local dn="$2"
+    local op="$3"
+    local attr="$4"
+    shift 4
+    local -a values=("$@")
+
+    local req
+    local mid; ldap::message::next_id mid
+    ldap::modify::build req "${mid}" "${dn}" "${op}" "${attr}" "${values[@]}" || return 1
+
+    declare -A resp_dict=()
+    ldap::_send_recv "${session}" "${req}" "${mid}" resp_dict || return 1
+
+    if [[ "${resp_dict[op_tag]}" != "67" ]]; then
+        log::error "ldap::session::modify : ModifyResponse attendu, tag=0x${resp_dict[op_tag]}"
+        return 1
+    fi
+
+    declare -A mod_result=()
+    ldap::modify::parse_response "${resp_dict[op_value]}" mod_result || return 1
+
+    if ldap::modify::is_success mod_result; then
+        log::info "ldap : modification réussie sur '${attr}' pour '${dn}'"
+        return 0
+    else
+        log::error "ldap::session::modify : échec (${mod_result[result_name]}) — ${mod_result[diagnostic_msg]}"
+        return 1
+    fi
+}
+
+# ldap::session::add <session> <dn> <attrs_dict_var>
+#
+# Ajoute un nouvel objet LDAP.
+ldap::session::add() {
+    local session="$1"
+    local dn="$2"
+    local attrs_var="$3"
+
+    local req
+    local mid; ldap::message::next_id mid
+    ldap::add::build req "${mid}" "${dn}" "${attrs_var}" || return 1
+
+    declare -A resp_dict=()
+    ldap::_send_recv "${session}" "${req}" "${mid}" resp_dict || return 1
+
+    if [[ "${resp_dict[op_tag]}" != "69" ]]; then
+        log::error "ldap::session::add : AddResponse attendu, tag=0x${resp_dict[op_tag]}"
+        return 1
+    fi
+
+    declare -A add_result=()
+    ldap::add::parse_response "${resp_dict[op_value]}" add_result || return 1
+
+    if ldap::add::is_success add_result; then
+        log::info "ldap : ajout réussi pour '${dn}'"
+        return 0
+    else
+        log::error "ldap::session::add : échec (${add_result[result_name]}) — ${add_result[diagnostic_msg]}"
+        return 1
+    fi
 }
 
 # ── Recherche ─────────────────────────────────────────────────────────────────
