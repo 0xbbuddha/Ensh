@@ -105,7 +105,8 @@ if ! ldap::session::bind_simple "${session}" "${BIND_DN}" "${PASS}"; then
     ldap::session::disconnect "${session}"
     exit 1
 fi
-_ok "Authentifié en tant que ${BIND_DN}\n"
+_ok "Authentifié en tant que ${BIND_DN}"
+printf '\n'
 
 # ── Section 1 : Utilisateurs ──────────────────────────────────────────────────
 
