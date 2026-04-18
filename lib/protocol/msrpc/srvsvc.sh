@@ -87,8 +87,8 @@ ndr::wstr() {
 
     # Padding pour aligner sur 4 octets
     local -i pad=$(( (4 - (byte_count % 4)) % 4 ))
-    local padding
-    printf -v padding '%0*d' $(( pad * 2 )) 0
+    local padding=""
+    (( pad > 0 )) && printf -v padding '%0*d' $(( pad * 2 )) 0
 
     _ndr_wstr_out="${count_le}${offset_le}${count_le}${utf16}${padding}"
 }

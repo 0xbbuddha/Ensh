@@ -140,7 +140,8 @@ if ! srvsvc::bind "${sess}" "${file_id}"; then
     smb::session::disconnect "${sess}"
     exit 1
 fi
-_ok "BIND OK.\n"
+_ok "BIND OK."
+printf '\n'
 
 _info "NetrShareEnum en cours..."
 declare -a shares=()
