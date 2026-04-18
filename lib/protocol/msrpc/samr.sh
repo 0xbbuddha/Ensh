@@ -9,6 +9,8 @@
 #   - SamrLookupDomainInSamServer (OpNum 5)    — SID du domaine
 #   - SamrOpenDomain (OpNum 7)                 — handle domaine
 #   - SamrEnumerateUsersInDomain (OpNum 13)    — liste des utilisateurs
+#   - SamrOpenUser (OpNum 34)                  — handle utilisateur
+#   - SamrQueryInformationUser2 (OpNum 47)     — informations utilisateur
 #
 # Flux d'utilisation :
 #   1. smb::session::open_pipe sess "\samr" file_id
@@ -50,11 +52,15 @@ readonly SAMR_OPNUM_CLOSE_HANDLE=1
 readonly SAMR_OPNUM_LOOKUP_DOMAIN=5
 readonly SAMR_OPNUM_OPEN_DOMAIN=7
 readonly SAMR_OPNUM_ENUM_USERS=13
+readonly SAMR_OPNUM_OPEN_USER=34
+readonly SAMR_OPNUM_QUERY_USER2=47
 
 readonly SAMR_ACCESS_MAXIMUM_ALLOWED=0x02000000
 readonly SAMR_USER_NORMAL_ACCOUNT=0x00000010
 readonly SAMR_PREF_MAX_LENGTH=0xFFFFFFFF
 readonly SAMR_STATUS_MORE_ENTRIES=0x00000105
+readonly SAMR_USER_INFO_CLASS_CONTROL=16
+readonly SAMR_UF_ACCOUNTDISABLE=0x00000002
 
 # Taille d'un context handle NDR32 (20 octets = 40 nibbles)
 readonly SAMR_HANDLE_SIZE=20
@@ -148,6 +154,29 @@ _samr_encode_sid() {
     _ses_out="${count_le}${sid_hex}"
 }
 
+# _samr_build_open_user_stub <domain_handle_hex> <rid_int> <var_out>
+_samr_build_open_user_stub() {
+    local dom_handle="${1^^}"
+    local -i rid="$2"
+    local -n _sbous_out="$3"
+
+    local access_le rid_le
+    endian::le32 "${SAMR_ACCESS_MAXIMUM_ALLOWED}" access_le
+    endian::le32 "${rid}" rid_le
+
+    _sbous_out="${dom_handle}${access_le}${rid_le}"
+}
+
+# _samr_build_query_user_control_stub <user_handle_hex> <var_out>
+_samr_build_query_user_control_stub() {
+    local user_handle="${1^^}"
+    local -n _sbqucs_out="$2"
+
+    local info_class_le
+    endian::le16 "${SAMR_USER_INFO_CLASS_CONTROL}" info_class_le
+    _sbqucs_out="${user_handle}${info_class_le}"
+}
+
 # _samr_decode_sid <stub_hex> <offset_bytes> <var_sid_hex_out> <var_next_out>
 #
 # Lit un RPC_SID depuis le stub NDR32 (MaxCount + SID bytes).
@@ -167,6 +196,41 @@ _samr_decode_sid() {
     (( off += sid_bytes ))
 
     _sds_next="${off}"
+}
+
+# _samr_parse_user_control_resp <stub_hex> <var_uac_out>
+_samr_parse_user_control_resp() {
+    local stub="${1^^}"
+    local -n _spucr_uac="$2"
+
+    local -i stub_len=$(( ${#stub} / 2 ))
+    if (( stub_len < 16 )); then
+        log::error "samr::query_user_control : stub trop court (${stub_len}B)"
+        return 1
+    fi
+
+    local -i status
+    endian::read_le32 "${stub}" $(( stub_len - 4 )) status
+    if (( status != 0 )); then
+        log::error "samr::query_user_control : NTSTATUS=0x$(printf '%08X' ${status})"
+        return 1
+    fi
+
+    local buf_ptr
+    endian::read_le32 "${stub}" 0 buf_ptr
+    if (( buf_ptr == 0 )); then
+        log::error "samr::query_user_control : buffer NULL"
+        return 1
+    fi
+
+    local info_class
+    endian::read_le16 "${stub}" 4 info_class
+    if (( info_class != SAMR_USER_INFO_CLASS_CONTROL )); then
+        log::error "samr::query_user_control : classe inattendue=${info_class}"
+        return 1
+    fi
+
+    endian::read_le32 "${stub}" 8 _spucr_uac
 }
 
 # ── Helper interne : appel RPC via IOCTL ─────────────────────────────────────
@@ -376,6 +440,52 @@ samr::open_domain() {
 
     _sod_out="${resp:0:$(( SAMR_HANDLE_SIZE * 2 ))}"
     log::info "samr : SamrOpenDomain OK"
+}
+
+# ── SamrOpenUser (OpNum 34) ──────────────────────────────────────────────────
+
+# samr::open_user <sess> <file_id> <domain_handle> <rid_int> <var_user_handle_out>
+samr::open_user() {
+    local _sess="$1"
+    local file_id="$2"
+    local dom_handle="${3^^}"
+    local -i rid="$4"
+    local -n _sou_out="$5"
+
+    local stub
+    _samr_build_open_user_stub "${dom_handle}" "${rid}" stub
+
+    local resp
+    _samr_rpc_call "${_sess}" "${file_id}" "${SAMR_OPNUM_OPEN_USER}" "${stub}" 6 resp || return 1
+
+    local -i status
+    endian::read_le32 "${resp}" 20 status
+    if (( status != 0 )); then
+        log::error "samr::open_user : rid=${rid} NTSTATUS=0x$(printf '%08X' ${status})"
+        return 1
+    fi
+
+    _sou_out="${resp:0:$(( SAMR_HANDLE_SIZE * 2 ))}"
+}
+
+# ── SamrQueryInformationUser2 (OpNum 47) ─────────────────────────────────────
+
+# samr::query_user_control <sess> <file_id> <user_handle> <var_uac_out>
+#
+# Retourne le champ UserAccountControl du compte (UF_*).
+samr::query_user_control() {
+    local _sess="$1"
+    local file_id="$2"
+    local user_handle="${3^^}"
+    local -n _squc_out="$4"
+
+    local stub
+    _samr_build_query_user_control_stub "${user_handle}" stub
+
+    local resp
+    _samr_rpc_call "${_sess}" "${file_id}" "${SAMR_OPNUM_QUERY_USER2}" "${stub}" 7 resp || return 1
+
+    _samr_parse_user_control_resp "${resp}" _squc_out
 }
 
 # ── SamrEnumerateUsersInDomain (OpNum 13) ────────────────────────────────────

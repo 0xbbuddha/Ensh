@@ -69,6 +69,15 @@ _ok()   { printf ' \033[32m[+]\033[0m %s\n' "$*"; }
 _err()  { printf ' \033[31m[✗]\033[0m %s\n' "$*" >&2; }
 _info() { printf ' \033[34m[*]\033[0m %s\n' "$*"; }
 
+_acct_state() {
+    local -i uac="$1"
+    if (( uac & SAMR_UF_ACCOUNTDISABLE )); then
+        printf '[disabled]'
+    else
+        printf '[enabled]'
+    fi
+}
+
 _banner
 
 # ── Connexion et négociation ──────────────────────────────────────────────────
@@ -186,15 +195,26 @@ fi
 
 declare -i total="${#users[@]}"
 
-printf ' %-8s  %s\n' "RID" "NOM"
-printf ' %s\n' "──────────────────────────────────────"
+printf ' %-24s  %-8s  %s\n' "NOM" "RID" "FLAGS"
+printf ' %s\n' "────────────────────────────────────────────────────────────"
 
 for entry in "${users[@]}"; do
     IFS=':' read -r rid name <<< "${entry}"
-    printf ' \033[32m%-8s\033[0m  %s\n' "${rid}" "${name}"
+    state="[unknown]"
+    declare user_handle
+    declare -i user_uac=0
+
+    if samr::open_user "${sess}" "${file_id}" "${domain_handle}" "${rid}" user_handle; then
+        if samr::query_user_control "${sess}" "${file_id}" "${user_handle}" user_uac; then
+            state="$(_acct_state "${user_uac}")"
+        fi
+        samr::close_handle "${sess}" "${file_id}" "${user_handle}"
+    fi
+
+    printf ' \033[32m%-24s\033[0m  %-8s  %s\n' "${name}" "${rid}" "${state}"
 done
 
-printf '\n %s\n' "──────────────────────────────────────"
+printf '\n %s\n' "────────────────────────────────────────────────────────────"
 printf ' %d compte(s) trouvé(s) dans %s\n\n' "${total}" "${DOMAIN_SHORT}"
 
 # ── Nettoyage ─────────────────────────────────────────────────────────────────
