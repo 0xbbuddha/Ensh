@@ -92,6 +92,9 @@ if [[ "${1:-}" == "--all" ]]; then
         transport/tcp           \
         transport/udp           \
         transport/tls           \
+        protocol/llmnr/message  \
+        protocol/llmnr/client   \
+        protocol/llmnr/server   \
         protocol/netbios/nbt          \
         protocol/ntlm/flags           \
         protocol/ntlm/negotiate       \
@@ -128,9 +131,6 @@ fi
 
 if [[ "${1:-}" == "--ldap" ]]; then
     ensh::import \
-        protocol/ldap/message           \
+        protocol/ldap/session           \
         protocol/ldap/filter            \
-        protocol/ldap/bind              \
-        protocol/ldap/search            \
-        protocol/ldap/session
 fi
