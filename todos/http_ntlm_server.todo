@@ -1,0 +1,26 @@
+Module : lib/server/http/ntlm.sh + examples/http_capture_ntlm.sh
+Priorité : basse
+
+Serveur HTTP minimal pour capture/relay NTLM et scénario WPAD
+Impacket couvre déjà cette famille via ntlmrelayx.servers.httprelayserver.
+
+À implémenter :
+- http::server::start <bind_ip> [port] [challenge_hex] [callback_fn]
+    Répondre en 401 avec WWW-Authenticate: NTLM
+- http::server::capture_negotiate <base64_blob> <var_dict_out>
+    Extraire le Type 1 NTLM depuis Authorization: NTLM
+- http::server::build_challenge <var_out> <challenge_hex> [target_info_hex]
+    Générer le Type 2 NTLM base64
+- http::server::capture_authenticate <base64_blob> <var_dict_out>
+    Extraire user/domain/workstation + response NetNTLMv1/v2
+- http::server::serve_wpad <proxy_host> <proxy_port>
+    Optionnel : réponse PAC/WPAD simple
+- http::server::stop
+- examples/http_capture_ntlm.sh
+
+Cas d'usage offensif :
+    - Capture NTLM sur clients qui basculent en HTTP
+    - WPAD / proxy auth forcée
+    - Base future pour du relay HTTP -> LDAP/SMB
+
+Référence : impacket.examples.ntlmrelayx.servers.httprelayserver

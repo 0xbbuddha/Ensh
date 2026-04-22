@@ -1,0 +1,29 @@
+Module : lib/protocol/netbios/nbns.sh
+Priorité : moyenne
+
+NBNS / NBT-NS — NetBIOS Name Service (RFC 1001/1002)
+Complément direct de LLMNR pour le poisoning et la résolution de noms legacy.
+Impacket couvre déjà cette brique dans impacket.nmb ; Ensh n'a aujourd'hui que NBT session (port 139).
+
+À implémenter :
+- nbns::query::build <var_out> <txid_hex> <name> [suffix_hex]
+    Construire un Name Query Request UDP/137
+    Réutiliser protocol/netbios/nbt.sh pour le First Level Encoding du nom
+- nbns::query::build_node_status <var_out> <txid_hex> <name>
+    Requête NBSTAT pour récupérer noms enregistrés + MAC
+- nbns::response::build <var_out> <txid_hex> <name> <ip_hex> [ttl]
+    Positive Name Query Response forgée (poisoning)
+- nbns::parse <hex_data> <var_dict_out>
+    Extraire : txid, flags, question name/type, TTL, NB flags, IP(s), node status entries
+- nbns::client::query <var_out> <name> [server_ip]
+    Envoi UDP/137 unicast ou broadcast
+- nbns::server::start <iface> <attacker_ip> [callback_fn]
+    Répondre aux Name Queries comme un poisoner Responder-style
+- nbns::server::stop
+
+Cas d'usage offensif :
+    - Companion de LLMNR poisoning
+    - Résolution NetBIOS legacy et découverte de noms
+    - Capture NTLMv1/v2 via UNC vers l'attaquant
+
+Référence : RFC 1001/1002, impacket.nmb

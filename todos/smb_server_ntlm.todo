@@ -1,0 +1,29 @@
+Module : lib/server/smb/ntlm.sh + examples/smb_capture_ntlm.sh
+Priorité : moyenne
+
+Serveur SMB minimal pour capture NTLM
+Chaînon manquant entre LLMNR/NBNS poisoning et la récupération exploitable de NetNTLMv1/v2.
+Impacket couvre ce rôle dans ntlmrelayx.servers.smbrelayserver ; Ensh n'a aujourd'hui qu'un client SMB.
+
+À implémenter :
+- smb::server::start <bind_ip> [port] [challenge_hex] [callback_fn]
+    Serveur SMB2 minimal orienté auth
+    Objectif : négociation SMB2 + SessionSetup NTLM, pas un vrai file server complet
+- smb::server::capture_negotiate <hex_data> <var_dict_out>
+    Extraire le Type 1 NTLM du client
+- smb::server::build_challenge <var_out> <challenge_hex> [target_info_hex]
+    Construire le Type 2 NTLM à renvoyer
+- smb::server::capture_authenticate <hex_data> <var_dict_out>
+    Extraire Type 3, domaine, user, workstation, NTLMv1/v2 response
+- smb::server::format_hashcat_ntlmv2 <parsed_dict>
+    Sortie exploitable pour hashcat / cracking offline
+- smb::server::stop
+- examples/smb_capture_ntlm.sh
+    Petit wrapper pour lancer le listener et logger les captures
+
+Notes d'implémentation :
+    - Commencer par un mode capture-only
+    - Supporter port alternatif pour tests locaux (ne pas dépendre immédiatement du 445 root)
+    - Réutiliser protocol/ntlm/* existant autant que possible
+
+Référence : impacket.examples.ntlmrelayx.servers.smbrelayserver
