@@ -28,12 +28,12 @@ ensh::import transport/tcp
 
 # ── Types de paquets NBT (RFC 1002 §4.3.1) ───────────────────────────────────
 
-readonly NBT_TYPE_SESSION_MESSAGE   =0x00
-readonly NBT_TYPE_SESSION_REQUEST   =0x81
-readonly NBT_TYPE_POS_SESSION_RESP  =0x82
-readonly NBT_TYPE_NEG_SESSION_RESP  =0x83
-readonly NBT_TYPE_RETARGET_RESP     =0x84
-readonly NBT_TYPE_KEEPALIVE         =0x85
+readonly NBT_TYPE_SESSION_MESSAGE=0x00
+readonly NBT_TYPE_SESSION_REQUEST=0x81
+readonly NBT_TYPE_POS_SESSION_RESP=0x82
+readonly NBT_TYPE_NEG_SESSION_RESP=0x83
+readonly NBT_TYPE_RETARGET_RESP=0x84
+readonly NBT_TYPE_KEEPALIVE=0x85
 
 # ── Encodage du nom NetBIOS (First Level Encoding, RFC 1002 §4.1) ─────────────
 
