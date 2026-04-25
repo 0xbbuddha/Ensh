@@ -5,6 +5,8 @@
 # Usage :
 #   source /path/to/ensh.sh             # Charge uniquement le core
 #   source /path/to/ensh.sh --all       # Charge tous les modules
+#   source /path/to/ensh.sh --ldap      # Charge la pile LDAP
+#   source /path/to/ensh.sh --smb       # Charge la pile SMB/MSRPC
 #
 # Une fois chargé, on peut importer des modules à la demande :
 #   ensh::import crypto/nt_hash
@@ -76,8 +78,53 @@ ensh::import \
     core/bytes \
     core/endian
 
-# ── Mode "tout charger" ───────────────────────────────────────────────────────
-if [[ "${1:-}" == "--all" ]]; then
+# ── Presets de chargement ────────────────────────────────────────────────────
+
+ensh::preset::ldap() {
+    ensh::import \
+        protocol/ldap/message           \
+        protocol/ldap/bind              \
+        protocol/ldap/filter            \
+        protocol/ldap/search            \
+        protocol/ldap/modify            \
+        protocol/ldap/add               \
+        protocol/ldap/session
+}
+
+ensh::preset::smb() {
+    ensh::import \
+        protocol/netbios/nbt            \
+        protocol/netbios/nbns           \
+        protocol/ntlm/flags             \
+        protocol/ntlm/negotiate         \
+        protocol/ntlm/challenge         \
+        protocol/ntlm/authenticate      \
+        protocol/smb/spnego             \
+        protocol/smb/smb1/header        \
+        protocol/smb/smb1/negotiate     \
+        protocol/smb/smb1/session_setup \
+        protocol/smb/smb1/tree_connect  \
+        protocol/smb/smb2/header        \
+        protocol/smb/smb2/negotiate     \
+        protocol/smb/smb2/session_setup \
+        protocol/smb/smb2/tree_connect  \
+        protocol/smb/smb2/ioctl         \
+        protocol/smb/smb2/signing       \
+        protocol/smb/smb2/create        \
+        protocol/smb/smb2/read          \
+        protocol/smb/smb2/write         \
+        protocol/smb/smb2/close         \
+        protocol/smb/smb2/query_directory \
+        protocol/smb/smb3/signing       \
+        protocol/smb/session            \
+        protocol/dcerpc/bind            \
+        protocol/dcerpc/request         \
+        protocol/msrpc/srvsvc           \
+        protocol/msrpc/samr             \
+        protocol/msrpc/lsarpc
+}
+
+ensh::preset::all() {
     ensh::import \
         encoding/utf16          \
         encoding/base64         \
@@ -95,42 +142,25 @@ if [[ "${1:-}" == "--all" ]]; then
         protocol/llmnr/message  \
         protocol/llmnr/client   \
         protocol/llmnr/server   \
-        protocol/netbios/nbt          \
-        protocol/ntlm/flags           \
-        protocol/ntlm/negotiate       \
-        protocol/ntlm/challenge       \
-        protocol/ntlm/authenticate    \
-        protocol/smb/spnego           \
-        protocol/smb/smb1/header      \
-        protocol/smb/smb1/negotiate   \
-        protocol/smb/smb1/session_setup \
-        protocol/smb/smb1/tree_connect  \
-        protocol/smb/smb2/header        \
-        protocol/smb/smb2/negotiate     \
-        protocol/smb/smb2/session_setup \
-        protocol/smb/smb2/tree_connect  \
-        protocol/smb/smb2/ioctl         \
-        protocol/smb/smb3/signing       \
-        protocol/smb/smb2/signing       \
-        protocol/smb/session            \
-        protocol/dcerpc/bind            \
-        protocol/dcerpc/request         \
-        protocol/msrpc/srvsvc           \
-        protocol/ldap/message           \
-        protocol/ldap/filter            \
-        protocol/ldap/bind              \
-        protocol/ldap/search            \
-        protocol/ldap/session
-fi
+        protocol/netbios/nbt    \
+        protocol/netbios/nbns   \
+        protocol/kerberos/asreq \
+        protocol/kerberos/tgsreq
 
-# ── Chargement des modules spécifiques ───────────────────────────────────────
-if [[ "${1:-}" == "--smb" ]]; then
-    ensh::import \
-        protocol/smb/session
-fi
+    ensh::preset::ldap
+    ensh::preset::smb
+}
 
-if [[ "${1:-}" == "--ldap" ]]; then
-    ensh::import \
-        protocol/ldap/session           \
-        protocol/ldap/filter            \
-fi
+# ── Chargement des presets demandés ──────────────────────────────────────────
+
+case "${1:-}" in
+    --all)
+        ensh::preset::all
+        ;;
+    --ldap)
+        ensh::preset::ldap
+        ;;
+    --smb)
+        ensh::preset::smb
+        ;;
+esac
