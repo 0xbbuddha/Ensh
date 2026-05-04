@@ -1,0 +1,280 @@
+%%{init: {"flowchart": {"curve": "linear"}}}%%
+graph LR
+    Ensh[Ensh]
+    Ensh:::partly_complete
+
+        Core[Core]
+        Core:::production_ready
+        Ensh --Contains--> Core
+
+            bytes[bytes]
+            bytes:::production_ready
+            Core --Contains--> bytes
+
+            endian[endian]
+            endian:::production_ready
+            Core --Contains--> endian
+
+            hex[hex]
+            hex:::production_ready
+            Core --Contains--> hex
+
+            log[log]
+            log:::production_ready
+            Core --Contains--> log
+
+        Encoding[Encoding]
+        Encoding:::production_ready
+        Ensh --Contains--> Encoding
+
+            asn1[asn1]
+            asn1:::production_ready
+            Encoding --Contains--> asn1
+
+            base64[base64]
+            base64:::production_ready
+            Encoding --Contains--> base64
+
+            utf16[utf16]
+            utf16:::production_ready
+            Encoding --Contains--> utf16
+
+        Transport[Transport]
+        Transport:::production_ready
+        Ensh --Contains--> Transport
+
+            tcp[tcp]
+            tcp:::production_ready
+            Transport --Contains--> tcp
+
+            tls[tls]
+            tls:::production_ready
+            Transport --Contains--> tls
+
+            udp[udp]
+            udp:::production_ready
+            Transport --Contains--> udp
+
+        Crypto[Crypto]
+        Crypto:::partly_complete
+        Ensh --Contains--> Crypto
+
+            md4[md4]
+            md4:::production_ready
+            Crypto --Contains--> md4
+
+            rc4[rc4]
+            rc4:::production_ready
+            Crypto --Contains--> rc4
+
+            nt_hash[nt_hash]
+            nt_hash:::production_ready
+            Crypto --Contains--> nt_hash
+
+            lm_hash[lm_hash]
+            lm_hash:::production_ready
+            Crypto --Contains--> lm_hash
+
+            hmac_md5[hmac_md5]
+            hmac_md5:::production_ready
+            Crypto --Contains--> hmac_md5
+
+            hmac_sha256[hmac_sha256]
+            hmac_sha256:::production_ready
+            Crypto --Contains--> hmac_sha256
+
+            aes_cmac[aes_cmac]
+            aes_cmac:::production_ready
+            Crypto --Contains--> aes_cmac
+
+            ntlmv1[ntlmv1]
+            ntlmv1:::todo_in_the_future
+            Crypto --Contains--> ntlmv1
+
+        Network[Network]
+        Network:::partly_complete
+        Ensh --Contains--> Network
+
+            NTLM[NTLM]
+            NTLM:::production_ready
+            Network --Contains--> NTLM
+
+                ntlm_flags[flags]
+                ntlm_flags:::production_ready
+                NTLM --Contains--> ntlm_flags
+
+                ntlm_negotiate[negotiate]
+                ntlm_negotiate:::production_ready
+                NTLM --Contains--> ntlm_negotiate
+
+                ntlm_challenge[challenge]
+                ntlm_challenge:::production_ready
+                NTLM --Contains--> ntlm_challenge
+
+                ntlm_authenticate[authenticate]
+                ntlm_authenticate:::production_ready
+                NTLM --Contains--> ntlm_authenticate
+
+            SMB[SMB]
+            SMB:::partly_complete
+            Network --Contains--> SMB
+            SMB --DependsOn--> NTLM
+
+                SMB1[SMB 1.0]
+                SMB1:::partly_complete
+                SMB --Contains--> SMB1
+
+                SMB2[SMB 2.x]
+                SMB2:::production_ready
+                SMB --Contains--> SMB2
+                SMB2 --DependsOn--> SMB1
+
+                    smb2_negotiate[negotiate]
+                    smb2_negotiate:::production_ready
+                    SMB2 --Contains--> smb2_negotiate
+
+                    smb2_session[session_setup]
+                    smb2_session:::production_ready
+                    SMB2 --Contains--> smb2_session
+
+                    smb2_tree[tree_connect]
+                    smb2_tree:::production_ready
+                    SMB2 --Contains--> smb2_tree
+
+                    smb2_signing[signing HMAC-SHA256]
+                    smb2_signing:::production_ready
+                    SMB2 --Contains--> smb2_signing
+
+                    smb2_ioctl[ioctl]
+                    smb2_ioctl:::production_ready
+                    SMB2 --Contains--> smb2_ioctl
+
+                    smb2_fileops[file ops]
+                    smb2_fileops:::production_ready
+                    SMB2 --Contains--> smb2_fileops
+
+                SMB3[SMB 3.x]
+                SMB3:::partly_complete
+                SMB --Contains--> SMB3
+                SMB3 --DependsOn--> SMB2
+
+                    smb3_signing[signing AES-CMAC]
+                    smb3_signing:::production_ready
+                    SMB3 --Contains--> smb3_signing
+
+                    smb3_encryption[encryption]
+                    smb3_encryption:::todo_in_the_future
+                    SMB3 --Contains--> smb3_encryption
+
+            DCERPC[DCE/RPC]
+            DCERPC:::production_ready
+            Network --Contains--> DCERPC
+            DCERPC --DependsOn--> SMB2
+
+                dcerpc_bind[bind]
+                dcerpc_bind:::production_ready
+                DCERPC --Contains--> dcerpc_bind
+
+                dcerpc_request[request]
+                dcerpc_request:::production_ready
+                DCERPC --Contains--> dcerpc_request
+
+            MSRPC[MSRPC]
+            MSRPC:::partly_complete
+            Network --Contains--> MSRPC
+            MSRPC --DependsOn--> DCERPC
+
+                srvsvc[SRVSVC]
+                srvsvc:::production_ready
+                MSRPC --Contains--> srvsvc
+
+                lsarpc[LSARPC]
+                lsarpc:::production_ready
+                MSRPC --Contains--> lsarpc
+
+                samr[SAMR]
+                samr:::partly_complete
+                MSRPC --Contains--> samr
+
+            LDAP[LDAP]
+            LDAP:::production_ready
+            Network --Contains--> LDAP
+
+                ldap_bind[bind]
+                ldap_bind:::production_ready
+                LDAP --Contains--> ldap_bind
+
+                ldap_search[search]
+                ldap_search:::production_ready
+                LDAP --Contains--> ldap_search
+
+                ldap_write[add / modify]
+                ldap_write:::production_ready
+                LDAP --Contains--> ldap_write
+
+            Kerberos[Kerberos]
+            Kerberos:::partly_complete
+            Network --Contains--> Kerberos
+
+                kerberos_asreq[AS-REQ]
+                kerberos_asreq:::production_ready
+                Kerberos --Contains--> kerberos_asreq
+
+                kerberos_tgsreq[TGS-REQ]
+                kerberos_tgsreq:::production_ready
+                Kerberos --Contains--> kerberos_tgsreq
+
+                kerberos_ccache[ccache / PAC]
+                kerberos_ccache:::todo_in_the_future
+                Kerberos --Contains--> kerberos_ccache
+
+            LLMNR[LLMNR]
+            LLMNR:::production_ready
+            Network --Contains--> LLMNR
+
+                llmnr_message[message]
+                llmnr_message:::production_ready
+                LLMNR --Contains--> llmnr_message
+
+                llmnr_client[client]
+                llmnr_client:::production_ready
+                LLMNR --Contains--> llmnr_client
+
+                llmnr_server[server / poisoning]
+                llmnr_server:::production_ready
+                LLMNR --Contains--> llmnr_server
+
+            NetBIOS[NetBIOS]
+            NetBIOS:::partly_complete
+            Network --Contains--> NetBIOS
+
+                nbt[NBT session]
+                nbt:::production_ready
+                NetBIOS --Contains--> nbt
+
+                nbns[NBNS / poisoning]
+                nbns:::todo_in_the_future
+                NetBIOS --Contains--> nbns
+
+            DNS[DNS]
+            DNS:::todo_in_the_future
+            Network --Contains--> DNS
+
+        Server[Server]
+        Server:::todo_in_the_future
+        Ensh --Contains--> Server
+
+            smb_server[SMB capture server]
+            smb_server:::todo_in_the_future
+            Server --Contains--> smb_server
+            smb_server --DependsOn--> SMB2
+            smb_server --DependsOn--> NTLM
+
+            http_server[HTTP capture server]
+            http_server:::todo_in_the_future
+            Server --Contains--> http_server
+            http_server --DependsOn--> NTLM
+
+    classDef production_ready fill:#40db40,stroke:#333,stroke-width:2px,color:#ffffff;
+    classDef partly_complete fill:#ff9800,stroke:#333,stroke-width:2px,color:#ffffff;
+    classDef todo_in_the_future fill:#ff4242,stroke:#333,stroke-width:2px,color:#ffffff;
