@@ -1,0 +1,34 @@
+Module : lib/protocol/smb/smb3/encryption.sh
+Priorité : basse
+
+SMB 3.x — Chiffrement (AES-128-CCM / AES-128-GCM)
+Ensh supporte déjà le signing SMB 3.x (AES-CMAC). Le chiffrement complet
+(Transform header, AES-CCM/GCM) est requis pour les serveurs avec RequireEncryption.
+
+À implémenter :
+- smb3::encryption::build_transform_header <var_out> <session_id> <nonce_hex> <encrypted_data_hex>
+    Construire le SMB2 TRANSFORM_HEADER (protocole ID 0xFD534D42)
+    Champs : ProtocolId(4B) + Signature(16B) + Nonce(16B) + OriginalMessageSize(4B)
+             + EncryptionAlgorithm(2B) + SessionId(8B)
+- smb3::encryption::encrypt <var_out> <plaintext_hex> <key_hex> [algorithm]
+    algorithm : AES-128-CCM (défaut, dialecte 0x0300) ou AES-128-GCM (0x0311)
+    Via : openssl enc -aes-128-ccm / -aes-128-gcm avec AAD = transform header
+- smb3::encryption::decrypt <var_out> <ciphertext_hex> <key_hex> <nonce_hex> <tag_hex>
+    Déchiffrement + vérification du tag d'authenticité
+- smb3::encryption::derive_keys <session_key_hex> <var_encrypt_out> <var_decrypt_out>
+    Dériver les clés de chiffrement/déchiffrement via SP800-108 CTR-KDF (HMAC-SHA256)
+    Labels : "SMBS2CCipherKey\0" / "SMBC2SCipherKey\0"
+    Réutiliser lib/crypto/hmac_sha256.sh
+
+Notes d'implémentation :
+    - openssl 1.1+ requis pour AES-CCM/GCM avec AAD
+    - Nonce : 12 octets aléatoires (CCM) ou 12 octets (GCM), jamais réutilisé
+    - Négocier le chiffrement dans SMB2 NEGOTIATE (Capabilities + EncryptionCapabilities context)
+    - Activer dans session.sh : _SMB_ENCRYPT[] flag par session
+
+Dépendances déjà disponibles :
+    lib/crypto/aes_cmac.sh      → signing SMB3
+    lib/crypto/hmac_sha256.sh   → dérivation de clés
+    lib/protocol/smb/smb2/negotiate.sh
+
+Référence : MS-SMB2 §3.1.4.2 (Transform header), §3.1.3 (key derivation)

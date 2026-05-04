@@ -56,7 +56,7 @@ graph LR
             Transport --Contains--> udp
 
         Crypto[Crypto]
-        Crypto:::partly_complete
+        Crypto:::production_ready
         Ensh --Contains--> Crypto
 
             md4[md4]
@@ -88,7 +88,7 @@ graph LR
             Crypto --Contains--> aes_cmac
 
             ntlmv1[ntlmv1]
-            ntlmv1:::todo_in_the_future
+            ntlmv1:::production_ready
             Crypto --Contains--> ntlmv1
 
         Network[Network]

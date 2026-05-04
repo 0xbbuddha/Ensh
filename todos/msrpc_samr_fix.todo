@@ -1,0 +1,26 @@
+Module : lib/protocol/msrpc/samr.sh
+Priorité : haute
+
+SAMR — Fix SamrOpenDomain (OpNum 7)
+Le serveur ferme la connexion TCP immédiatement après réception du stub SamrOpenDomain.
+SamrConnect (OpNum 0) et SamrLookupDomainInSamServer (OpNum 5) fonctionnent.
+
+Symptôme :
+    [DBG] dcerpc::request : opnum=7 stub=52B call_id=4
+    [WRN] tcp::recv : connexion fermée ou timeout
+    [ERR] smb::_recv : connexion fermée ou timeout
+
+Stub actuel (52 octets) :
+    ServerHandle (20B) + DesiredAccess LE32 (4B) + SID MaxCount LE32 (4B) + SID bytes (24B)
+    → SID exemple : 0104000000000005150000008051D2F4F551D7F78063814D
+
+Pistes à investiguer :
+    1. Layout du PRPC_SID dans SamrOpenDomain : vérifier si Windows attend un
+       unique pointer (4B referent) avant le MaxCount, ou le SID inline direct.
+       Impacket (hSamrOpenDomain) n'envoie pas de pointer pour DomainId.
+    2. Comparer le stub byte-par-byte avec un dump Wireshark d'impacket ou rpcclient.
+    3. Tester avec DesiredAccess = DOMAIN_LOOKUP (0x200) au lieu de MAXIMUM_ALLOWED.
+    4. Vérifier que call_id est bien incrémenté depuis le BIND.
+    5. Ajouter log::debug du stub hex complet avant envoi pour valider les bytes.
+
+Référence : MS-SAMR §3.1.5.1 (SamrOpenDomain), impacket samr.py hSamrOpenDomain

@@ -13,9 +13,8 @@
 ### Transport (complete)
 - **Implemented**: tcp, tls, udp.
 
-### Crypto (partly complete)
-- **Implemented**: md4, rc4, nt_hash, lm_hash, hmac_md5, hmac_sha256, aes_cmac.
-- **To do**: NTLMv1 (DES-ECB challenge/response + hashcat format 5500).
+### Crypto (complete)
+- **Implemented**: md4, rc4, nt_hash, lm_hash, hmac_md5, hmac_sha256, aes_cmac, ntlmv1.
 
 ### Network (partly complete)
 - **NTLM**: Complete — negotiate, challenge, authenticate (NTLMv2, flags, signing).
@@ -42,12 +41,11 @@
 
 1. Fix `samr::open_domain` on all targets (MSRPC/SAMR stabilization).
 2. Implement NBNS — NBT-NS poisoning companion to LLMNR.
-3. Implement NTLMv1 crypto (DES-ECB + hashcat 5500 format).
-4. Implement SMB capture server (SMB2 minimal auth listener).
-5. Implement HTTP capture server (NTLM 401 relay).
-6. Implement DNS query (pure bash, RFC 1035).
-7. Stabilize Kerberos — ccache read/write, PAC parsing.
-8. SMB 3.x full dialect support (encryption, pre-auth integrity).
+3. Implement SMB capture server (SMB2 minimal auth listener).
+4. Implement HTTP capture server (NTLM 401 relay).
+5. Implement DNS query (pure bash, RFC 1035).
+6. Stabilize Kerberos — ccache read/write, PAC parsing.
+7. SMB 3.x full dialect support (encryption, pre-auth integrity).
 
 ---
 

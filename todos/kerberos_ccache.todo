@@ -1,0 +1,50 @@
+Module : lib/protocol/kerberos/ccache.sh + lib/protocol/kerberos/pac.sh
+Priorité : basse
+
+Kerberos — ccache et PAC
+Compléter la couche Kerberos au-delà des échanges AS-REQ/TGS-REQ déjà implémentés.
+Permet de réutiliser des tickets existants (pass-the-ticket) et d'extraire des infos du PAC.
+
+────────────────────────────────────────────────────────
+lib/protocol/kerberos/ccache.sh
+────────────────────────────────────────────────────────
+Format MIT ccache (credential cache) : fichier ou KEYRING stockant des tickets Kerberos.
+
+À implémenter :
+- ccache::read <file_path> <var_dict_out>
+    Parser le header ccache (version 4) + credentials
+    Extraire : principal client, realm, tickets (TGT/TGS), clé de session
+- ccache::write <file_path> <principal> <realm> <ticket_hex> <session_key_hex> [expiry]
+    Écrire un ticket AS-REP / TGS-REP en format ccache MIT v4
+    Usage : passer le ticket à kinit ou à des outils comme impacket via KRB5CCNAME
+- ccache::list <file_path>
+    Lister les tickets présents avec expiry et SPN
+- ccache::export_b64 <file_path> <var_out>
+    Exporter en base64 pour transmission
+
+Format référence : MIT krb5 ccache format v4 (type FILE:)
+
+────────────────────────────────────────────────────────
+lib/protocol/kerberos/pac.sh
+────────────────────────────────────────────────────────
+PAC (Privilege Attribute Certificate) : structure Microsoft dans les tickets Kerberos
+contenant l'identité de l'utilisateur (RID, groupes, SID).
+
+À implémenter :
+- pac::parse <pac_hex> <var_dict_out>
+    Parser le PACTYPE + buffers (LOGON_INFO, CLIENT_INFO, SERVER_CHECKSUM...)
+    Extraire : username, domain, user_rid, group_rids, logon_time
+- pac::parse_logon_info <hex> <var_dict_out>
+    Décoder le KERB_VALIDATION_INFO (NDR32) : SID, groupes, flags UAC
+
+Cas d'usage offensif :
+    - Pass-the-ticket : écrire un ccache à partir d'un AS-REP capturé
+    - Extraction d'infos domaine depuis un PAC sans authentification LDAP
+    - Silver ticket : forger un PAC (hors scope initial)
+
+Dépendances déjà disponibles :
+    lib/protocol/kerberos/asreq.sh  → AS-REP brut
+    lib/protocol/kerberos/tgsreq.sh → TGS-REP brut
+    lib/encoding/asn1.sh            → décodage DER
+
+Référence : MIT krb5 ccache format, MS-PAC §2.4
