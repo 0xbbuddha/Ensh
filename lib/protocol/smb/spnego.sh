@@ -128,3 +128,45 @@ spnego::find_ntlm() {
     log::debug "spnego::find_ntlm : signature NTLM introuvable dans le blob"
     return 1
 }
+
+# spnego::server_ntlm_init <var_out>
+#
+# Token SPNEGO pour le SecurityBuffer du SMB2 NEGOTIATE Response serveur :
+# NegTokenInit avec mechTypes=[NTLMSSP] seulement (pas de mechToken).
+spnego::server_ntlm_init() {
+    local -n _spnego_sni_out="$1"
+
+    local _mech_seq _mech_types _neg_seq _neg_ctx
+    asn1::tlv "30" "${SPNEGO_NTLMSSP_OID_DER}" _mech_seq
+    asn1::tlv "A0" "${_mech_seq}" _mech_types
+    asn1::tlv "30" "${_mech_types}" _neg_seq
+    asn1::tlv "A0" "${_neg_seq}" _neg_ctx
+    asn1::tlv "60" "${SPNEGO_OID_DER}${_neg_ctx}" _spnego_sni_out
+}
+
+# spnego::ntlm_challenge <ntlm_challenge_hex> <var_out>
+#
+# Token SPNEGO NegTokenResp pour le SMB2 SESSION_SETUP Response (challenge) :
+# negState=accept-incomplete + supportedMech=NTLMSSP + responseToken=Type2.
+spnego::ntlm_challenge() {
+    local ntlm_chall="${1^^}"
+    local -n _spnego_nc_out="$2"
+
+    # negState [A0] : ENUMERATED { 1 = accept-incomplete }
+    local _ns_val _neg_state
+    asn1::tlv "0A" "01" _ns_val
+    asn1::tlv "A0" "${_ns_val}" _neg_state
+
+    # supportedMech [A1] : OID(NTLMSSP)
+    local _supp_mech
+    asn1::tlv "A1" "${SPNEGO_NTLMSSP_OID_DER}" _supp_mech
+
+    # responseToken [A2] : OCTET STRING { NTLM Challenge }
+    local _resp_os _resp_tok
+    asn1::tlv "04" "${ntlm_chall}" _resp_os
+    asn1::tlv "A2" "${_resp_os}" _resp_tok
+
+    local _neg_seq
+    asn1::tlv "30" "${_neg_state}${_supp_mech}${_resp_tok}" _neg_seq
+    asn1::tlv "A1" "${_neg_seq}" _spnego_nc_out
+}

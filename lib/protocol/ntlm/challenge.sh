@@ -253,3 +253,90 @@ ntlm::challenge::build_target_info() {
     # EOL
     _ntlm_bti_out+="00000000"
 }
+
+# ntlm::challenge::build <var_out> <challenge_hex>
+#                        [target_name] [nb_domain] [nb_computer]
+#                        [dns_domain]  [dns_computer]
+#
+# Construit un message NTLM Challenge complet (Type 2) pret a envoyer.
+# Les noms sont encodes en UTF-16LE dans les AvPairs et TargetName.
+# Layout : Signature(8)+MsgType(4)+TargetNameFields(8)+Flags(4)+Challenge(8)
+#           +Reserved(8)+TargetInfoFields(8)+Version(8) = 56B, puis payload.
+ntlm::challenge::build() {
+    local -n _ntlm_chb_out="$1"
+    local server_challenge="${2^^}"
+    local target_name="${3:-WORKGROUP}"
+    local nb_domain="${4:-WORKGROUP}"
+    local nb_computer="${5:-}"
+    local dns_domain="${6:-}"
+    local dns_computer="${7:-}"
+
+    # Flags
+    local flags_le
+    ntlm::flags::default_challenge flags_le
+
+    # TargetName en UTF-16LE
+    local tn_utf16
+    utf16::encode_le "${target_name}" tn_utf16
+    local -i tn_len=$(( ${#tn_utf16} / 2 ))
+
+    # TargetInfo (avpairs en UTF-16LE)
+    local ti="" _avp _avid_le _avlen_le _val_utf16
+
+    _ntlm_chb_avpair() {
+        local -n __avp="$1"; local -i __id="$2"; local __val="$3"
+        local __il __ll
+        endian::le16 "${__id}" __il
+        endian::le16 "$(( ${#__val} / 2 ))" __ll
+        __avp="${__il}${__ll}${__val}"
+    }
+
+    utf16::encode_le "${nb_domain}" _val_utf16
+    _ntlm_chb_avpair _avp "${NTLM_AVID_NB_DOMAIN}" "${_val_utf16}"; ti+="${_avp}"
+
+    if [[ -n "${nb_computer}" ]]; then
+        utf16::encode_le "${nb_computer}" _val_utf16
+        _ntlm_chb_avpair _avp "${NTLM_AVID_NB_COMPUTER}" "${_val_utf16}"; ti+="${_avp}"
+    fi
+    if [[ -n "${dns_domain}" ]]; then
+        utf16::encode_le "${dns_domain}" _val_utf16
+        _ntlm_chb_avpair _avp "${NTLM_AVID_DNS_DOMAIN}" "${_val_utf16}"; ti+="${_avp}"
+    fi
+    if [[ -n "${dns_computer}" ]]; then
+        utf16::encode_le "${dns_computer}" _val_utf16
+        _ntlm_chb_avpair _avp "${NTLM_AVID_DNS_COMPUTER}" "${_val_utf16}"; ti+="${_avp}"
+    fi
+
+    # MsvAvTimestamp : FILETIME courant
+    local -i _ep; _ep="$(date +%s)"
+    local -i _ft=$(( _ep * 10000000 + 116444736000000000 ))
+    local _ts_le; endian::le64 $(( _ft >> 32 )) $(( _ft & 0xFFFFFFFF )) _ts_le
+    _ntlm_chb_avpair _avp "${NTLM_AVID_TIMESTAMP}" "${_ts_le}"; ti+="${_avp}"
+
+    # EOL
+    ti+="00000000"
+
+    local -i ti_len=$(( ${#ti} / 2 ))
+
+    # Offsets payload (header = 56B avec Version)
+    local -i tn_off=56
+    local -i ti_off=$(( tn_off + tn_len ))
+
+    # Construction
+    local buf="${_NTLM_CHALLENGE_SIG}"
+    local _le
+
+    endian::le32 2 _le;             buf+="${_le}"       # MessageType=2
+    endian::le16 "${tn_len}" _le;   buf+="${_le}${_le}" # TargetNameFields Len+MaxLen
+    endian::le32 "${tn_off}" _le;   buf+="${_le}"       # TargetNameFields Offset
+    buf+="${flags_le}"                                   # NegotiateFlags
+    buf+="${server_challenge}"                           # ServerChallenge (8B)
+    buf+="0000000000000000"                              # Reserved
+    endian::le16 "${ti_len}" _le;   buf+="${_le}${_le}" # TargetInfoFields Len+MaxLen
+    endian::le32 "${ti_off}" _le;   buf+="${_le}"       # TargetInfoFields Offset
+    buf+="0A00614B0000000F"                              # Version (Win10)
+    buf+="${tn_utf16}"                                   # Payload: TargetName
+    buf+="${ti}"                                         # Payload: TargetInfo
+
+    _ntlm_chb_out="${buf^^}"
+}

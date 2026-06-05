@@ -102,6 +102,26 @@ ntlm::flags::default_negotiate() {
     ntlm::flags::to_le32 "${f}" "$1"
 }
 
+# ntlm::flags::default_challenge <var_out>
+#
+# Flags standard d'un Challenge serveur NTLMv2 (aligne Responder/impacket).
+ntlm::flags::default_challenge() {
+    local -i f=0
+    (( f |= NTLM_FL_UNICODE ))
+    (( f |= NTLM_FL_REQUEST_TARGET ))
+    (( f |= NTLM_FL_SIGN ))
+    (( f |= NTLM_FL_NTLM ))
+    (( f |= NTLM_FL_ALWAYS_SIGN ))
+    (( f |= NTLM_FL_TARGET_TYPE_DOMAIN ))
+    (( f |= NTLM_FL_EXTENDED_SESS_SEC ))
+    (( f |= NTLM_FL_TARGET_INFO ))
+    (( f |= NTLM_FL_VERSION ))
+    (( f |= NTLM_FL_128BIT ))
+    (( f |= NTLM_FL_KEY_EXCH ))
+    (( f |= NTLM_FL_56BIT ))
+    ntlm::flags::to_le32 "${f}" "$1"
+}
+
 # ntlm::flags::type1_for_signing <var_out> [signing_required_int]
 #
 # Construit les flags NTLM du Type 1 comme le fait impacket pour SMB :
