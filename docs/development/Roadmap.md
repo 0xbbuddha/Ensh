@@ -2,7 +2,7 @@
 
 ## Where we are now
 
-- **Overall**: Ensh is mostly complete on the network stack. Core, Encoding, Transport, Crypto, and the main protocol layers are functional. The Server layer is now implemented. Remaining: Kerberos ccache/PAC and SMB 3.x encryption.
+- **Overall**: Ensh is mostly complete on the network stack. Core, Encoding, Transport, Crypto, and the main protocol layers are functional. The Server layer is now implemented. Remaining: SMB 3.x encryption.
 
 ### Core (complete)
 - **Implemented**: bytes, endian, hex, log.
@@ -26,7 +26,7 @@
 - **MSRPC/LSARPC**: Complete - SID lookup, RID brute force.
 - **MSRPC/SAMR**: Complete - connect, lookup_domain, open_domain, enumerate_users (validated on Windows DC).
 - **LDAP**: Complete - session, bind, search, filter, add, modify.
-- **Kerberos**: Partly complete - AS-REQ (AS-REP roasting), TGS-REQ. No ccache or PAC parsing yet.
+- **Kerberos**: Complete - AS-REQ (AS-REP roasting), TGS-REQ, ccache read/write (MIT v4, impacket-compatible), PAC parsing (CLIENT_INFO, UPN_DNS_INFO, LOGON_INFO).
 - **LLMNR**: Complete - wire format (RFC 4795), client (multicast query), server (poisoning via socat).
 - **NetBIOS/NBT**: Complete - NBT session transport + NBNS (UDP/137 queries and poisoning).
 - **DNS**: Complete - pure bash DNS query (RFC 1035). A, AAAA, PTR, MX, NS, TXT, SRV. TCP fallback for truncated responses.
@@ -44,7 +44,7 @@
 3. ~~Implement SMB capture server (SMB2 minimal auth listener).~~ Done.
 4. ~~Implement HTTP capture server (NTLM 401 relay).~~ Done.
 5. ~~Implement DNS query (pure bash, RFC 1035).~~ Done.
-6. Stabilize Kerberos - ccache read/write, PAC parsing.
+6. ~~Stabilize Kerberos - ccache read/write, PAC parsing.~~ Done.
 7. SMB 3.x full dialect support (encryption, pre-auth integrity).
 
 ---
