@@ -433,13 +433,12 @@ samr::open_domain() {
   local access_le
   endian::le32 "${SAMR_ACCESS_MAXIMUM_ALLOWED}" access_le
 
-  # DomainId : PRPC_SID = typedef [unique] RPC_SID* → unique pointer NDR32 :
-  # referent ID (4B) inline + corps déféré (MaxCount + SID bytes) immédiatement.
-  local ref sid_enc
-  _samr_next_ref ref
+  # DomainId : PRPC_SID encode inline (MaxCount + SID bytes), sans referent ID.
+  # Aligne impacket hSamrOpenDomain - stub 52B.
+  local sid_enc
   _samr_encode_sid sid_enc "${sid_hex}"
 
-  local stub="${srv_handle}${access_le}${ref}${sid_enc}"
+  local stub="${srv_handle}${access_le}${sid_enc}"
 
   local resp
   _samr_rpc_call "${_sess}" "${file_id}" "${SAMR_OPNUM_OPEN_DOMAIN}" "${stub}" 4 resp || return 1
