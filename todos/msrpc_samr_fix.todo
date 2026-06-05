@@ -1,7 +1,7 @@
 Module : lib/protocol/msrpc/samr.sh
 Priorité : haute
 
-SAMR — Fix SamrOpenDomain (OpNum 7)
+SAMR - Fix SamrOpenDomain (OpNum 7)
 Le serveur ferme la connexion TCP immédiatement après réception du stub SamrOpenDomain.
 SamrConnect (OpNum 0) et SamrLookupDomainInSamServer (OpNum 5) fonctionnent.
 

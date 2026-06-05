@@ -180,7 +180,7 @@ graph LR
                 DCERPC --Contains--> dcerpc_request
 
             MSRPC[MSRPC]
-            MSRPC:::partly_complete
+            MSRPC:::production_ready
             Network --Contains--> MSRPC
             MSRPC --DependsOn--> DCERPC
 
@@ -193,7 +193,7 @@ graph LR
                 MSRPC --Contains--> lsarpc
 
                 samr[SAMR]
-                samr:::partly_complete
+                samr:::production_ready
                 MSRPC --Contains--> samr
 
             LDAP[LDAP]
@@ -213,7 +213,7 @@ graph LR
                 LDAP --Contains--> ldap_write
 
             Kerberos[Kerberos]
-            Kerberos:::partly_complete
+            Kerberos:::production_ready
             Network --Contains--> Kerberos
 
                 kerberos_asreq[AS-REQ]
@@ -225,7 +225,7 @@ graph LR
                 Kerberos --Contains--> kerberos_tgsreq
 
                 kerberos_ccache[ccache / PAC]
-                kerberos_ccache:::todo_in_the_future
+                kerberos_ccache:::production_ready
                 Kerberos --Contains--> kerberos_ccache
 
             LLMNR[LLMNR]
@@ -245,7 +245,7 @@ graph LR
                 LLMNR --Contains--> llmnr_server
 
             NetBIOS[NetBIOS]
-            NetBIOS:::partly_complete
+            NetBIOS:::production_ready
             Network --Contains--> NetBIOS
 
                 nbt[NBT session]
@@ -253,25 +253,29 @@ graph LR
                 NetBIOS --Contains--> nbt
 
                 nbns[NBNS / poisoning]
-                nbns:::todo_in_the_future
+                nbns:::production_ready
                 NetBIOS --Contains--> nbns
 
             DNS[DNS]
-            DNS:::todo_in_the_future
+            DNS:::production_ready
             Network --Contains--> DNS
 
+                dns_query[query RFC 1035]
+                dns_query:::production_ready
+                DNS --Contains--> dns_query
+
         Server[Server]
-        Server:::todo_in_the_future
+        Server:::production_ready
         Ensh --Contains--> Server
 
             smb_server[SMB capture server]
-            smb_server:::todo_in_the_future
+            smb_server:::production_ready
             Server --Contains--> smb_server
             smb_server --DependsOn--> SMB2
             smb_server --DependsOn--> NTLM
 
             http_server[HTTP capture server]
-            http_server:::todo_in_the_future
+            http_server:::production_ready
             Server --Contains--> http_server
             http_server --DependsOn--> NTLM
 
