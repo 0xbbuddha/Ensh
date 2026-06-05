@@ -73,9 +73,9 @@ _SAMR_REF_ID=0x00020000
 # _samr_next_ref <var_out>
 # Retourne le prochain referent ID (LE32) et incrémente le compteur.
 _samr_next_ref() {
-    local -n _snr_out="$1"
-    endian::le32 "${_SAMR_REF_ID}" _snr_out
-    (( _SAMR_REF_ID++ ))
+  local -n _snr_out="$1"
+  endian::le32 "${_SAMR_REF_ID}" _snr_out
+  ((_SAMR_REF_ID++))
 }
 
 # _samr_encode_ustr_ptr <var_header_out> <var_deferred_out> <string>
@@ -84,33 +84,33 @@ _samr_next_ref() {
 #   header_out  : Length(2B) + MaxLen(2B) + referent(4B)   [inline dans stub]
 #   deferred_out: MaxCount(4B) + Offset(4B) + ActualCount(4B) + UTF-16LE + pad
 _samr_encode_ustr_ptr() {
-    local -n _seuptr_hdr="$1"
-    local -n _seuptr_def="$2"
-    local str="$3"
+  local -n _seuptr_hdr="$1"
+  local -n _seuptr_def="$2"
+  local str="$3"
 
-    local utf16
-    utf16::encode_le "${str}" utf16
-    local -i char_count=$(( ${#utf16} / 4 ))
-    local -i byte_len=$(( char_count * 2 ))
+  local utf16
+  utf16::encode_le "${str}" utf16
+  local -i char_count=$((${#utf16} / 4))
+  local -i byte_len=$((char_count * 2))
 
-    local len_le maxlen_le ref
-    endian::le16 "${byte_len}"         len_le
-    endian::le16 "${byte_len}"         maxlen_le
-    _samr_next_ref ref
+  local len_le maxlen_le ref
+  endian::le16 "${byte_len}" len_le
+  endian::le16 "${byte_len}" maxlen_le
+  _samr_next_ref ref
 
-    # RPC_UNICODE_STRING transporte ici les caractères effectifs uniquement :
-    # pas de NUL implicite dans le buffer déféré pour SamrLookupDomainInSamServer.
-    local maxcount_le offset_le actual_le
-    endian::le32 "${char_count}"       maxcount_le
-    endian::le32 0                     offset_le
-    endian::le32 "${char_count}"       actual_le
+  # RPC_UNICODE_STRING transporte ici les caractères effectifs uniquement :
+  # pas de NUL implicite dans le buffer déféré pour SamrLookupDomainInSamServer.
+  local maxcount_le offset_le actual_le
+  endian::le32 "${char_count}" maxcount_le
+  endian::le32 0 offset_le
+  endian::le32 "${char_count}" actual_le
 
-    local -i pad=$(( (4 - (byte_len % 4)) % 4 ))
-    local padding=""
-    (( pad > 0 )) && printf -v padding '%0*d' $(( pad * 2 )) 0
+  local -i pad=$(((4 - (byte_len % 4)) % 4))
+  local padding=""
+  ((pad > 0)) && printf -v padding '%0*d' $((pad * 2)) 0
 
-    _seuptr_hdr="${len_le}${maxlen_le}${ref}"
-    _seuptr_def="${maxcount_le}${offset_le}${actual_le}${utf16}${padding}"
+  _seuptr_hdr="${len_le}${maxlen_le}${ref}"
+  _seuptr_def="${maxcount_le}${offset_le}${actual_le}${utf16}${padding}"
 }
 
 # _samr_read_ustr <stub_hex> <offset_bytes> <var_str_out> <var_next_out>
@@ -118,25 +118,27 @@ _samr_encode_ustr_ptr() {
 # Lit les données déférées d'une RPC_UNICODE_STRING
 # (MaxCount + Offset + ActualCount + UTF-16LE + pad).
 _samr_read_ustr() {
-    local stub="${1^^}"
-    local -i off="$2"
-    local -n _sru_str="$3"
-    local -n _sru_next="$4"
+  local stub="${1^^}"
+  local -i off="$2"
+  local -n _sru_str="$3"
+  local -n _sru_next="$4"
 
-    local _max _actual
-    endian::read_le32 "${stub}" "${off}" _max;    (( off += 4 ))
-    (( off += 4 ))  # Offset (toujours 0)
-    endian::read_le32 "${stub}" "${off}" _actual; (( off += 4 ))
+  local _max _actual
+  endian::read_le32 "${stub}" "${off}" _max
+  ((off += 4))
+  ((off += 4)) # Offset (toujours 0)
+  endian::read_le32 "${stub}" "${off}" _actual
+  ((off += 4))
 
-    local -i byte_count=$(( _actual * 2 ))
-    local utf16_hex="${stub:$(( off * 2 )):$(( byte_count * 2 ))}"
-    (( off += byte_count ))
+  local -i byte_count=$((_actual * 2))
+  local utf16_hex="${stub:$((off * 2)):$((byte_count * 2))}"
+  ((off += byte_count))
 
-    local -i pad=$(( (4 - (byte_count % 4)) % 4 ))
-    (( off += pad ))
+  local -i pad=$(((4 - (byte_count % 4)) % 4))
+  ((off += pad))
 
-    utf16::decode_le "${utf16_hex}" _sru_str
-    _sru_next="${off}"
+  utf16::decode_le "${utf16_hex}" _sru_str
+  _sru_next="${off}"
 }
 
 # _samr_encode_sid <var_out> <sid_hex>
@@ -146,35 +148,36 @@ _samr_read_ustr() {
 #   + SubAuthority[n](4B each)
 # <sid_hex> : octets bruts du SID en hex, ex: "010500000000000515000000..."
 _samr_encode_sid() {
-    local -n _ses_out="$1"
-    local sid_hex="${2^^}"
+  local -n _ses_out="$1"
+  local sid_hex="${2^^}"
 
-    local -i sub_count=$(( 16#${sid_hex:2:2} ))
-    local count_le; endian::le32 "${sub_count}" count_le
-    _ses_out="${count_le}${sid_hex}"
+  local -i sub_count=$((16#${sid_hex:2:2}))
+  local count_le
+  endian::le32 "${sub_count}" count_le
+  _ses_out="${count_le}${sid_hex}"
 }
 
 # _samr_build_open_user_stub <domain_handle_hex> <rid_int> <var_out>
 _samr_build_open_user_stub() {
-    local dom_handle="${1^^}"
-    local -i rid="$2"
-    local -n _sbous_out="$3"
+  local dom_handle="${1^^}"
+  local -i rid="$2"
+  local -n _sbous_out="$3"
 
-    local access_le rid_le
-    endian::le32 "${SAMR_ACCESS_MAXIMUM_ALLOWED}" access_le
-    endian::le32 "${rid}" rid_le
+  local access_le rid_le
+  endian::le32 "${SAMR_ACCESS_MAXIMUM_ALLOWED}" access_le
+  endian::le32 "${rid}" rid_le
 
-    _sbous_out="${dom_handle}${access_le}${rid_le}"
+  _sbous_out="${dom_handle}${access_le}${rid_le}"
 }
 
 # _samr_build_query_user_control_stub <user_handle_hex> <var_out>
 _samr_build_query_user_control_stub() {
-    local user_handle="${1^^}"
-    local -n _sbqucs_out="$2"
+  local user_handle="${1^^}"
+  local -n _sbqucs_out="$2"
 
-    local info_class_le
-    endian::le16 "${SAMR_USER_INFO_CLASS_CONTROL}" info_class_le
-    _sbqucs_out="${user_handle}${info_class_le}"
+  local info_class_le
+  endian::le16 "${SAMR_USER_INFO_CLASS_CONTROL}" info_class_le
+  _sbqucs_out="${user_handle}${info_class_le}"
 }
 
 # _samr_decode_sid <stub_hex> <offset_bytes> <var_sid_hex_out> <var_next_out>
@@ -182,137 +185,140 @@ _samr_build_query_user_control_stub() {
 # Lit un RPC_SID depuis le stub NDR32 (MaxCount + SID bytes).
 # Retourne les octets bruts du SID (sans le MaxCount).
 _samr_decode_sid() {
-    local stub="${1^^}"
-    local -i off="$2"
-    local -n _sds_hex="$3"
-    local -n _sds_next="$4"
+  local stub="${1^^}"
+  local -i off="$2"
+  local -n _sds_hex="$3"
+  local -n _sds_next="$4"
 
-    local _sub_count
-    endian::read_le32 "${stub}" "${off}" _sub_count; (( off += 4 ))
+  local _sub_count
+  endian::read_le32 "${stub}" "${off}" _sub_count
+  ((off += 4))
 
-    # Revision(1) + SubAuthorityCount(1) + IdentifierAuthority(6) + SubAuthority[n](4n)
-    local -i sid_bytes=$(( 8 + _sub_count * 4 ))
-    _sds_hex="${stub:$(( off * 2 )):$(( sid_bytes * 2 ))}"
-    (( off += sid_bytes ))
+  # Revision(1) + SubAuthorityCount(1) + IdentifierAuthority(6) + SubAuthority[n](4n)
+  local -i sid_bytes=$((8 + _sub_count * 4))
+  _sds_hex="${stub:$((off * 2)):$((sid_bytes * 2))}"
+  ((off += sid_bytes))
 
-    _sds_next="${off}"
+  _sds_next="${off}"
 }
 
 # _samr_parse_user_control_resp <stub_hex> <var_uac_out>
 _samr_parse_user_control_resp() {
-    local stub="${1^^}"
-    local -n _spucr_uac="$2"
+  local stub="${1^^}"
+  local -n _spucr_uac="$2"
 
-    local -i stub_len=$(( ${#stub} / 2 ))
-    if (( stub_len < 16 )); then
-        log::error "samr::query_user_control : stub trop court (${stub_len}B)"
-        return 1
-    fi
+  local -i stub_len=$((${#stub} / 2))
+  if ((stub_len < 16)); then
+    log::error "samr::query_user_control : stub trop court (${stub_len}B)"
+    return 1
+  fi
 
-    local -i status
-    endian::read_le32 "${stub}" $(( stub_len - 4 )) status
-    if (( status != 0 )); then
-        log::error "samr::query_user_control : NTSTATUS=0x$(printf '%08X' ${status})"
-        return 1
-    fi
+  local -i status
+  endian::read_le32 "${stub}" $((stub_len - 4)) status
+  if ((status != 0)); then
+    log::error "samr::query_user_control : NTSTATUS=0x$(printf '%08X' ${status})"
+    return 1
+  fi
 
-    local buf_ptr
-    endian::read_le32 "${stub}" 0 buf_ptr
-    if (( buf_ptr == 0 )); then
-        log::error "samr::query_user_control : buffer NULL"
-        return 1
-    fi
+  local buf_ptr
+  endian::read_le32 "${stub}" 0 buf_ptr
+  if ((buf_ptr == 0)); then
+    log::error "samr::query_user_control : buffer NULL"
+    return 1
+  fi
 
-    local info_class
-    endian::read_le16 "${stub}" 4 info_class
-    if (( info_class != SAMR_USER_INFO_CLASS_CONTROL )); then
-        log::error "samr::query_user_control : classe inattendue=${info_class}"
-        return 1
-    fi
+  local info_class
+  endian::read_le16 "${stub}" 4 info_class
+  if ((info_class != SAMR_USER_INFO_CLASS_CONTROL)); then
+    log::error "samr::query_user_control : classe inattendue=${info_class}"
+    return 1
+  fi
 
-    endian::read_le32 "${stub}" 8 _spucr_uac
+  endian::read_le32 "${stub}" 8 _spucr_uac
 }
 
 # ── Helper interne : appel RPC via IOCTL ─────────────────────────────────────
 
 # _samr_rpc_call <sess> <file_id> <opnum> <stub_hex> <call_id> <var_resp_stub_out>
 _samr_rpc_call() {
-    local _sess="$1"
-    local file_id="$2"
-    local -i opnum="$3"
-    local stub_hex="$4"
-    local -i call_id="$5"
-    local -n _src_out="$6"
+  local _sess="$1"
+  local file_id="$2"
+  local -i opnum="$3"
+  local stub_hex="$4"
+  local -i call_id="$5"
+  local -n _src_out="$6"
 
-    local rpc_req
-    dcerpc::request::build rpc_req "${opnum}" "${stub_hex}" "${call_id}"
+  local rpc_req
+  dcerpc::request::build rpc_req "${opnum}" "${stub_hex}" "${call_id}"
 
-    local ioctl_req
-    local -i mid tid _dfs_h=0
-    smb2::_next_msg_id "${_sess}" mid
-    tid="${_SMB_TREE_IPC[${_sess}]:-0}"
+  local ioctl_req
+  local -i mid tid _dfs_h=0
+  smb2::_next_msg_id "${_sess}" mid
+  tid="${_SMB_TREE_IPC[${_sess}]:-0}"
 
-    smb2::ioctl::build_request ioctl_req \
-        "${SMB2_FSCTL_PIPE_TRANSCEIVE}" \
-        "${file_id}" \
-        "${rpc_req}" \
-        "${mid}" \
-        "${_SMB_SESSION_ID[${_sess}]}" \
-        "${tid}" \
-        65536 \
-        "${_dfs_h}"
+  smb2::ioctl::build_request ioctl_req \
+    "${SMB2_FSCTL_PIPE_TRANSCEIVE}" \
+    "${file_id}" \
+    "${rpc_req}" \
+    "${mid}" \
+    "${_SMB_SESSION_ID[${_sess}]}" \
+    "${tid}" \
+    65536 \
+    "${_dfs_h}"
 
-    smb::_send "${_sess}" "${ioctl_req}" || return 1
-    local _src_raw; smb::_recv "${_sess}" _src_raw 15 || return 1
+  smb::_send "${_sess}" "${ioctl_req}" || return 1
+  local _src_raw
+  smb::_recv "${_sess}" _src_raw 15 || return 1
 
-    local -A ioctl_resp
-    smb2::ioctl::parse_response "${_src_raw}" ioctl_resp || return 1
+  local -A ioctl_resp
+  smb2::ioctl::parse_response "${_src_raw}" ioctl_resp || return 1
 
-    local -A rpc_resp
-    dcerpc::request::parse_response "${ioctl_resp[output]}" rpc_resp || return 1
+  local -A rpc_resp
+  dcerpc::request::parse_response "${ioctl_resp[output]}" rpc_resp || return 1
 
-    _src_out="${rpc_resp[stub]}"
+  _src_out="${rpc_resp[stub]}"
 }
 
 # ── BIND ─────────────────────────────────────────────────────────────────────
 
 # samr::bind <sess> <file_id>
 samr::bind() {
-    local _sess="$1"
-    local file_id="$2"
+  local _sess="$1"
+  local file_id="$2"
 
-    local bind_pdu
-    dcerpc::bind::build bind_pdu \
-        "${DCERPC_IF_SAMR_UUID}" \
-        "${DCERPC_IF_SAMR_VER_MAJ}" \
-        "${DCERPC_IF_SAMR_VER_MIN}" \
-        1
+  local bind_pdu
+  dcerpc::bind::build bind_pdu \
+    "${DCERPC_IF_SAMR_UUID}" \
+    "${DCERPC_IF_SAMR_VER_MAJ}" \
+    "${DCERPC_IF_SAMR_VER_MIN}" \
+    1
 
-    local ioctl_req
-    local -i mid tid _dfs_h=0
-    smb2::_next_msg_id "${_sess}" mid
-    tid="${_SMB_TREE_IPC[${_sess}]:-0}"
+  local ioctl_req
+  local -i mid tid _dfs_h=0
+  smb2::_next_msg_id "${_sess}" mid
+  tid="${_SMB_TREE_IPC[${_sess}]:-0}"
 
-    smb2::ioctl::build_request ioctl_req \
-        "${SMB2_FSCTL_PIPE_TRANSCEIVE}" \
-        "${file_id}" \
-        "${bind_pdu}" \
-        "${mid}" \
-        "${_SMB_SESSION_ID[${_sess}]}" \
-        "${tid}" \
-        "${SMB2_IOCTL_MAX_OUTPUT}" \
-        "${_dfs_h}"
+  smb2::ioctl::build_request ioctl_req \
+    "${SMB2_FSCTL_PIPE_TRANSCEIVE}" \
+    "${file_id}" \
+    "${bind_pdu}" \
+    "${mid}" \
+    "${_SMB_SESSION_ID[${_sess}]}" \
+    "${tid}" \
+    "${SMB2_IOCTL_MAX_OUTPUT}" \
+    "${_dfs_h}"
 
-    smb::_send "${_sess}" "${ioctl_req}" || return 1
-    local _bind_raw; smb::_recv "${_sess}" _bind_raw 15 || return 1
+  smb::_send "${_sess}" "${ioctl_req}" || return 1
+  local _bind_raw
+  smb::_recv "${_sess}" _bind_raw 15 || return 1
 
-    local -A ioctl_resp
-    smb2::ioctl::parse_response "${_bind_raw}" ioctl_resp || return 1
+  local -A ioctl_resp
+  smb2::ioctl::parse_response "${_bind_raw}" ioctl_resp || return 1
 
-    local -A ack
-    dcerpc::bind::parse_ack "${ioctl_resp[output]}" ack || return 1
+  local -A ack
+  dcerpc::bind::parse_ack "${ioctl_resp[output]}" ack || return 1
 
-    log::info "samr : BIND OK — assoc_grp=${ack[assoc_grp]}"
+  log::info "samr : BIND OK — assoc_grp=${ack[assoc_grp]}"
 }
 
 # ── SamrConnect (OpNum 0) ────────────────────────────────────────────────────
@@ -322,43 +328,46 @@ samr::bind() {
 # Appelle SamrConnect (NULL ServerName) pour obtenir un handle serveur SAM.
 # <var_handle_out> : reçoit le context handle (40 nibbles hex).
 samr::connect() {
-    local _sess="$1"
-    local file_id="$2"
-    local -n _sc_out="$3"
+  local _sess="$1"
+  local file_id="$2"
+  local -n _sc_out="$3"
 
-    # ServerName : NULL unique pointer (0x00000000)
-    # DesiredAccess : MAXIMUM_ALLOWED
-    local access_le; endian::le32 "${SAMR_ACCESS_MAXIMUM_ALLOWED}" access_le
-    local stub="00000000${access_le}"
+  # ServerName : NULL unique pointer (0x00000000)
+  # DesiredAccess : MAXIMUM_ALLOWED
+  local access_le
+  endian::le32 "${SAMR_ACCESS_MAXIMUM_ALLOWED}" access_le
+  local stub="00000000${access_le}"
 
-    local resp
-    _samr_rpc_call "${_sess}" "${file_id}" "${SAMR_OPNUM_CONNECT}" "${stub}" 1 resp || return 1
+  local resp
+  _samr_rpc_call "${_sess}" "${file_id}" "${SAMR_OPNUM_CONNECT}" "${stub}" 1 resp || return 1
 
-    # Response : ServerHandle (20B) + ReturnValue (4B)
-    local -i status; endian::read_le32 "${resp}" 20 status
-    if (( status != 0 )); then
-        log::error "samr::connect : NTSTATUS=0x$(printf '%08X' ${status})"
-        return 1
-    fi
+  # Response : ServerHandle (20B) + ReturnValue (4B)
+  local -i status
+  endian::read_le32 "${resp}" 20 status
+  if ((status != 0)); then
+    log::error "samr::connect : NTSTATUS=0x$(printf '%08X' ${status})"
+    return 1
+  fi
 
-    _sc_out="${resp:0:$(( SAMR_HANDLE_SIZE * 2 ))}"
-    log::info "samr : SamrConnect OK"
+  _sc_out="${resp:0:$((SAMR_HANDLE_SIZE * 2))}"
+  log::info "samr : SamrConnect OK"
 }
 
 # ── SamrCloseHandle (OpNum 1) ────────────────────────────────────────────────
 
 # samr::close_handle <sess> <file_id> <handle_hex>
 samr::close_handle() {
-    local _sess="$1"
-    local file_id="$2"
-    local handle="${3^^}"
+  local _sess="$1"
+  local file_id="$2"
+  local handle="${3^^}"
 
-    local resp
-    _samr_rpc_call "${_sess}" "${file_id}" "${SAMR_OPNUM_CLOSE_HANDLE}" "${handle}" 2 resp || return 0
+  local resp
+  _samr_rpc_call "${_sess}" "${file_id}" "${SAMR_OPNUM_CLOSE_HANDLE}" "${handle}" 2 resp || return 0
 
-    local -i status; endian::read_le32 "${resp}" 20 status
-    (( status == 0 )) || log::warn "samr::close_handle : status=0x$(printf '%08X' ${status})"
-    return 0
+  local -i status
+  endian::read_le32 "${resp}" 20 status
+  ((status == 0)) || log::warn "samr::close_handle : status=0x$(printf '%08X' ${status})"
+  return 0
 }
 
 # ── SamrLookupDomainInSamServer (OpNum 5) ────────────────────────────────────
@@ -367,105 +376,110 @@ samr::close_handle() {
 #
 # Retourne le SID du domaine sous forme de bytes hex bruts.
 samr::lookup_domain() {
-    local _sess="$1"
-    local file_id="$2"
-    local srv_handle="${3^^}"
-    local domain_name="$4"
-    local -n _sld_sid="$5"
+  local _sess="$1"
+  local file_id="$2"
+  local srv_handle="${3^^}"
+  local domain_name="$4"
+  local -n _sld_sid="$5"
 
-    _SAMR_REF_ID=0x00020000
+  _SAMR_REF_ID=0x00020000
 
-    # ServerHandle (20B) + Name inline RPC_UNICODE_STRING + données déférées
-    local ustr_hdr ustr_def
-    _samr_encode_ustr_ptr ustr_hdr ustr_def "${domain_name}"
+  # ServerHandle (20B) + Name inline RPC_UNICODE_STRING + données déférées
+  local ustr_hdr ustr_def
+  _samr_encode_ustr_ptr ustr_hdr ustr_def "${domain_name}"
 
-    local stub="${srv_handle}${ustr_hdr}${ustr_def}"
+  local stub="${srv_handle}${ustr_hdr}${ustr_def}"
 
-    local resp
-    _samr_rpc_call "${_sess}" "${file_id}" "${SAMR_OPNUM_LOOKUP_DOMAIN}" "${stub}" 3 resp || return 1
+  local resp
+  _samr_rpc_call "${_sess}" "${file_id}" "${SAMR_OPNUM_LOOKUP_DOMAIN}" "${stub}" 3 resp || return 1
 
-    # Windows utilise l'immediate deferral NDR32 :
-    # les données SID déférées suivent IMMÉDIATEMENT le ptr, avant le ReturnValue.
-    # Layout : [0-3] DomainId ptr | [4-N] SID déféré | [fin-3..fin] ReturnValue
-    local -i _sl_stub_len=$(( ${#resp} / 2 ))
-    local -i status; endian::read_le32 "${resp}" $(( _sl_stub_len - 4 )) status
-    if (( status != 0 )); then
-        log::error "samr::lookup_domain : NTSTATUS=0x$(printf '%08X' ${status})"
-        return 1
-    fi
+  # Windows utilise l'immediate deferral NDR32 :
+  # les données SID déférées suivent IMMÉDIATEMENT le ptr, avant le ReturnValue.
+  # Layout : [0-3] DomainId ptr | [4-N] SID déféré | [fin-3..fin] ReturnValue
+  local -i _sl_stub_len=$((${#resp} / 2))
+  local -i status
+  endian::read_le32 "${resp}" $((_sl_stub_len - 4)) status
+  if ((status != 0)); then
+    log::error "samr::lookup_domain : NTSTATUS=0x$(printf '%08X' ${status})"
+    return 1
+  fi
 
-    local _sid_ptr; endian::read_le32 "${resp}" 0 _sid_ptr
-    if (( _sid_ptr == 0 )); then
-        log::error "samr::lookup_domain : DomainId pointer NULL"
-        return 1
-    fi
+  local _sid_ptr
+  endian::read_le32 "${resp}" 0 _sid_ptr
+  if ((_sid_ptr == 0)); then
+    log::error "samr::lookup_domain : DomainId pointer NULL"
+    return 1
+  fi
 
-    # SID déféré immédiatement après le ptr (offset 4)
-    local _next
-    _samr_decode_sid "${resp}" 4 _sld_sid _next
+  # SID déféré immédiatement après le ptr (offset 4)
+  local _next
+  _samr_decode_sid "${resp}" 4 _sld_sid _next
 
-    log::info "samr : domaine '${domain_name}' SID=${_sld_sid:0:8}..."
+  log::info "samr : domaine '${domain_name}' SID=${_sld_sid:0:8}..."
 }
 
 # ── SamrOpenDomain (OpNum 7) ─────────────────────────────────────────────────
 
 # samr::open_domain <sess> <file_id> <server_handle> <sid_hex> <var_domain_handle_out>
 samr::open_domain() {
-    local _sess="$1"
-    local file_id="$2"
-    local srv_handle="${3^^}"
-    local sid_hex="${4^^}"
-    local -n _sod_out="$5"
+  local _sess="$1"
+  local file_id="$2"
+  local srv_handle="${3^^}"
+  local sid_hex="${4^^}"
+  local -n _sod_out="$5"
 
-    _SAMR_REF_ID=0x00020000
+  _SAMR_REF_ID=0x00020000
 
-    local access_le; endian::le32 "${SAMR_ACCESS_MAXIMUM_ALLOWED}" access_le
+  local access_le
+  endian::le32 "${SAMR_ACCESS_MAXIMUM_ALLOWED}" access_le
 
-    # DomainId : RPC_SID inline (pas de unique pointer — Windows traite PRPC_SID
-    # comme ref pointer implicite pour les paramètres [in] obligatoires)
-    local sid_enc
-    _samr_encode_sid sid_enc "${sid_hex}"
+  # DomainId : PRPC_SID = typedef [unique] RPC_SID* → unique pointer NDR32 :
+  # referent ID (4B) inline + corps déféré (MaxCount + SID bytes) immédiatement.
+  local ref sid_enc
+  _samr_next_ref ref
+  _samr_encode_sid sid_enc "${sid_hex}"
 
-    local stub="${srv_handle}${access_le}${sid_enc}"
+  local stub="${srv_handle}${access_le}${ref}${sid_enc}"
 
-    local resp
-    _samr_rpc_call "${_sess}" "${file_id}" "${SAMR_OPNUM_OPEN_DOMAIN}" "${stub}" 4 resp || return 1
+  local resp
+  _samr_rpc_call "${_sess}" "${file_id}" "${SAMR_OPNUM_OPEN_DOMAIN}" "${stub}" 4 resp || return 1
 
-    # Response : DomainHandle (20B) + ReturnValue (4B)
-    local -i status; endian::read_le32 "${resp}" 20 status
-    if (( status != 0 )); then
-        log::error "samr::open_domain : NTSTATUS=0x$(printf '%08X' ${status})"
-        return 1
-    fi
+  # Response : DomainHandle (20B) + ReturnValue (4B)
+  local -i status
+  endian::read_le32 "${resp}" 20 status
+  if ((status != 0)); then
+    log::error "samr::open_domain : NTSTATUS=0x$(printf '%08X' ${status})"
+    return 1
+  fi
 
-    _sod_out="${resp:0:$(( SAMR_HANDLE_SIZE * 2 ))}"
-    log::info "samr : SamrOpenDomain OK"
+  _sod_out="${resp:0:$((SAMR_HANDLE_SIZE * 2))}"
+  log::info "samr : SamrOpenDomain OK"
 }
 
 # ── SamrOpenUser (OpNum 34) ──────────────────────────────────────────────────
 
 # samr::open_user <sess> <file_id> <domain_handle> <rid_int> <var_user_handle_out>
 samr::open_user() {
-    local _sess="$1"
-    local file_id="$2"
-    local dom_handle="${3^^}"
-    local -i rid="$4"
-    local -n _sou_out="$5"
+  local _sess="$1"
+  local file_id="$2"
+  local dom_handle="${3^^}"
+  local -i rid="$4"
+  local -n _sou_out="$5"
 
-    local stub
-    _samr_build_open_user_stub "${dom_handle}" "${rid}" stub
+  local stub
+  _samr_build_open_user_stub "${dom_handle}" "${rid}" stub
 
-    local resp
-    _samr_rpc_call "${_sess}" "${file_id}" "${SAMR_OPNUM_OPEN_USER}" "${stub}" 6 resp || return 1
+  local resp
+  _samr_rpc_call "${_sess}" "${file_id}" "${SAMR_OPNUM_OPEN_USER}" "${stub}" 6 resp || return 1
 
-    local -i status
-    endian::read_le32 "${resp}" 20 status
-    if (( status != 0 )); then
-        log::error "samr::open_user : rid=${rid} NTSTATUS=0x$(printf '%08X' ${status})"
-        return 1
-    fi
+  local -i status
+  endian::read_le32 "${resp}" 20 status
+  if ((status != 0)); then
+    log::error "samr::open_user : rid=${rid} NTSTATUS=0x$(printf '%08X' ${status})"
+    return 1
+  fi
 
-    _sou_out="${resp:0:$(( SAMR_HANDLE_SIZE * 2 ))}"
+  _sou_out="${resp:0:$((SAMR_HANDLE_SIZE * 2))}"
 }
 
 # ── SamrQueryInformationUser2 (OpNum 47) ─────────────────────────────────────
@@ -474,18 +488,18 @@ samr::open_user() {
 #
 # Retourne le champ UserAccountControl du compte (UF_*).
 samr::query_user_control() {
-    local _sess="$1"
-    local file_id="$2"
-    local user_handle="${3^^}"
-    local -n _squc_out="$4"
+  local _sess="$1"
+  local file_id="$2"
+  local user_handle="${3^^}"
+  local -n _squc_out="$4"
 
-    local stub
-    _samr_build_query_user_control_stub "${user_handle}" stub
+  local stub
+  _samr_build_query_user_control_stub "${user_handle}" stub
 
-    local resp
-    _samr_rpc_call "${_sess}" "${file_id}" "${SAMR_OPNUM_QUERY_USER2}" "${stub}" 7 resp || return 1
+  local resp
+  _samr_rpc_call "${_sess}" "${file_id}" "${SAMR_OPNUM_QUERY_USER2}" "${stub}" 7 resp || return 1
 
-    _samr_parse_user_control_resp "${resp}" _squc_out
+  _samr_parse_user_control_resp "${resp}" _squc_out
 }
 
 # ── SamrEnumerateUsersInDomain (OpNum 13) ────────────────────────────────────
@@ -495,49 +509,50 @@ samr::query_user_control() {
 # <var_list_out> : tableau indexé, entrées "RID:NOM"
 # Gère automatiquement STATUS_MORE_ENTRIES (pagination).
 samr::enumerate_users() {
-    local _sess="$1"
-    local file_id="$2"
-    local dom_handle="${3^^}"
-    local -n _seu_out="$4"
-    _seu_out=()
+  local _sess="$1"
+  local file_id="$2"
+  local dom_handle="${3^^}"
+  local -n _seu_out="$4"
+  _seu_out=()
 
-    local -i enum_ctx=0
-    local -i call_id=5
+  local -i enum_ctx=0
+  local -i call_id=5
 
-    while true; do
-        local enum_ctx_le uac_le pref_le
-        endian::le32 "${enum_ctx}"                  enum_ctx_le
-        endian::le32 "${SAMR_USER_NORMAL_ACCOUNT}"  uac_le
-        endian::le32 "${SAMR_PREF_MAX_LENGTH}"      pref_le
+  while true; do
+    local enum_ctx_le uac_le pref_le
+    endian::le32 "${enum_ctx}" enum_ctx_le
+    endian::le32 "${SAMR_USER_NORMAL_ACCOUNT}" uac_le
+    endian::le32 "${SAMR_PREF_MAX_LENGTH}" pref_le
 
-        # DomainHandle(20B) + EnumerationContext(4B) + UserAccountControl(4B)
-        # + PreferedMaximumLength(4B)
-        # EnumerationContext est [in,out] DWORD : valeur directe (pas de pointeur)
-        local stub="${dom_handle}${enum_ctx_le}${uac_le}${pref_le}"
+    # DomainHandle(20B) + EnumerationContext(4B) + UserAccountControl(4B)
+    # + PreferedMaximumLength(4B)
+    # EnumerationContext est [in,out] DWORD : valeur directe (pas de pointeur)
+    local stub="${dom_handle}${enum_ctx_le}${uac_le}${pref_le}"
 
-        local resp
-        _samr_rpc_call "${_sess}" "${file_id}" "${SAMR_OPNUM_ENUM_USERS}" "${stub}" "${call_id}" resp \
-            || return 1
+    local resp
+    _samr_rpc_call "${_sess}" "${file_id}" "${SAMR_OPNUM_ENUM_USERS}" "${stub}" "${call_id}" resp ||
+      return 1
 
-        # Immediate deferral : CountReturned et ReturnValue sont en FIN de stub,
-        # après toutes les données déférées du Buffer.
-        local -i _eu_stub_len=$(( ${#resp} / 2 ))
-        local -i status; endian::read_le32 "${resp}" $(( _eu_stub_len - 4 )) status
+    # Immediate deferral : CountReturned et ReturnValue sont en FIN de stub,
+    # après toutes les données déférées du Buffer.
+    local -i _eu_stub_len=$((${#resp} / 2))
+    local -i status
+    endian::read_le32 "${resp}" $((_eu_stub_len - 4)) status
 
-        _samr_parse_enum_users "${resp}" _seu_out enum_ctx
+    _samr_parse_enum_users "${resp}" _seu_out enum_ctx
 
-        if (( status == 0 )); then
-            break
-        elif (( status == SAMR_STATUS_MORE_ENTRIES )); then
-            (( call_id++ ))
-            continue
-        else
-            log::error "samr::enumerate_users : NTSTATUS=0x$(printf '%08X' ${status})"
-            return 1
-        fi
-    done
+    if ((status == 0)); then
+      break
+    elif ((status == SAMR_STATUS_MORE_ENTRIES)); then
+      ((call_id++))
+      continue
+    else
+      log::error "samr::enumerate_users : NTSTATUS=0x$(printf '%08X' ${status})"
+      return 1
+    fi
+  done
 
-    log::info "samr : ${#_seu_out[@]} utilisateur(s) énuméré(s)"
+  log::info "samr : ${#_seu_out[@]} utilisateur(s) énuméré(s)"
 }
 
 # _samr_parse_enum_users <stub_hex> <var_list_inout> <var_enum_ctx_out>
@@ -550,55 +565,66 @@ samr::enumerate_users() {
 #   [fin-7..fin-4] CountReturned
 #   [fin-3..fin]   ReturnValue  ← déjà lu par l'appelant
 _samr_parse_enum_users() {
-    local stub="${1^^}"
-    local -n _speu_list="$2"
-    local -n _speu_ctx="$3"
+  local stub="${1^^}"
+  local -n _speu_list="$2"
+  local -n _speu_ctx="$3"
 
-    endian::read_le32 "${stub}" 0 _speu_ctx
+  endian::read_le32 "${stub}" 0 _speu_ctx
 
-    local _buf_ptr; endian::read_le32 "${stub}" 4 _buf_ptr
-    if (( _buf_ptr == 0 )); then
-        return 0
+  local _buf_ptr
+  endian::read_le32 "${stub}" 4 _buf_ptr
+  if ((_buf_ptr == 0)); then
+    return 0
+  fi
+
+  # Données déférées du Buffer ptr immédiatement après (offset 8)
+  local -i off=8
+
+  # SAMPR_ENUMERATION_BUFFER : EntriesRead(4B) + InnerPtr(4B)
+  local _entries_read
+  endian::read_le32 "${stub}" "${off}" _entries_read
+  ((off += 4))
+  local _arr_ptr
+  endian::read_le32 "${stub}" "${off}" _arr_ptr
+  ((off += 4))
+
+  if ((_arr_ptr == 0 || _entries_read == 0)); then
+    return 0
+  fi
+
+  # Tableau conformant : MaxCount(4B) + [_entries_read] SAMPR_RID_ENUMERATION
+  local _max_count
+  endian::read_le32 "${stub}" "${off}" _max_count
+  ((off += 4))
+
+  # Lire les entrées inline : RelativeId(4B) + Name RPC_UNICODE_STRING(8B)
+  local -a rids=()
+  local -a name_ptrs=()
+  local -i i
+
+  for ((i = 0; i < _entries_read; i++)); do
+    local _rid
+    endian::read_le32 "${stub}" "${off}" _rid
+    ((off += 4))
+    rids+=("${_rid}")
+
+    ((off += 2)) # Name.Length
+    ((off += 2)) # Name.MaximumLength
+    local _nptr
+    endian::read_le32 "${stub}" "${off}" _nptr
+    ((off += 4))
+    name_ptrs+=("${_nptr}")
+  done
+
+  # Lire les données déférées des chaînes dans l'ordre
+  for ((i = 0; i < _entries_read; i++)); do
+    if ((name_ptrs[i] != 0)); then
+      local _name _next
+      _samr_read_ustr "${stub}" "${off}" _name _next
+      off="${_next}"
+      _speu_list+=("${rids[i]}:${_name}")
+    else
+      _speu_list+=("${rids[i]}:")
     fi
-
-    # Données déférées du Buffer ptr immédiatement après (offset 8)
-    local -i off=8
-
-    # SAMPR_ENUMERATION_BUFFER : EntriesRead(4B) + InnerPtr(4B)
-    local _entries_read; endian::read_le32 "${stub}" "${off}" _entries_read; (( off += 4 ))
-    local _arr_ptr;      endian::read_le32 "${stub}" "${off}" _arr_ptr;      (( off += 4 ))
-
-    if (( _arr_ptr == 0 || _entries_read == 0 )); then
-        return 0
-    fi
-
-    # Tableau conformant : MaxCount(4B) + [_entries_read] SAMPR_RID_ENUMERATION
-    local _max_count; endian::read_le32 "${stub}" "${off}" _max_count; (( off += 4 ))
-
-    # Lire les entrées inline : RelativeId(4B) + Name RPC_UNICODE_STRING(8B)
-    local -a rids=()
-    local -a name_ptrs=()
-    local -i i
-
-    for (( i = 0; i < _entries_read; i++ )); do
-        local _rid; endian::read_le32 "${stub}" "${off}" _rid; (( off += 4 ))
-        rids+=("${_rid}")
-
-        (( off += 2 ))  # Name.Length
-        (( off += 2 ))  # Name.MaximumLength
-        local _nptr; endian::read_le32 "${stub}" "${off}" _nptr; (( off += 4 ))
-        name_ptrs+=("${_nptr}")
-    done
-
-    # Lire les données déférées des chaînes dans l'ordre
-    for (( i = 0; i < _entries_read; i++ )); do
-        if (( name_ptrs[i] != 0 )); then
-            local _name _next
-            _samr_read_ustr "${stub}" "${off}" _name _next
-            off="${_next}"
-            _speu_list+=("${rids[i]}:${_name}")
-        else
-            _speu_list+=("${rids[i]}:")
-        fi
-    done
+  done
 }
