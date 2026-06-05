@@ -58,10 +58,12 @@ smb::server::build_challenge() {
     local -n _sbc_out="$1"
     local challenge="${2^^}"
     local nb_domain="${3:-WORKGROUP}"
-    local nb_computer="${4:-}"
-    local dns_domain="${5:-}"
-    local dns_computer="${6:-}"
+    local nb_computer="${4:-SERVER}"
+    local dns_domain="${5:-workgroup.local}"
+    local dns_computer="${6:-server.workgroup.local}"
 
+    # MsvAvDnsComputerName (AvId=3) est obligatoire : impacket et Windows le
+    # lisent pour construire le SPN cifs/<hostname> dans computeResponseNTLMv2.
     local ntlm_chall
     ntlm::challenge::build ntlm_chall "${challenge}" \
         "${nb_domain}" "${nb_domain}" "${nb_computer}" \
@@ -87,9 +89,11 @@ smb::server::capture_negotiate() {
     # SecurityBuffer : offset 68, len 70 (dans le corps SESSION_SETUP = apres les 64B header)
     # Corps : StructureSize(2)+Flags(1)+SecurityMode(1)+Capabilities(4)+Channel(4)
     #         +SecBufOff(2)+SecBufLen(2)+PreviousSessId(8) = 24B -> SecBuf a offset 88
+    # SESSION_SETUP Request : SecBufOffset=76, SecBufLen=78
+    # (different de la Response : 68/70)
     local -i sec_off sec_len
-    endian::read_le16 "${msg}" 68 sec_off
-    endian::read_le16 "${msg}" 70 sec_len
+    endian::read_le16 "${msg}" 76 sec_off
+    endian::read_le16 "${msg}" 78 sec_len
 
     local spnego_blob
     hex::slice "${msg}" "${sec_off}" "${sec_len}" spnego_blob
@@ -113,9 +117,10 @@ smb::server::capture_authenticate() {
     _sca_dict[msg_id]="${_hdr[msg_id]}"
     _sca_dict[session_id]="${_hdr[session_id]}"
 
+    # SESSION_SETUP Request : SecBufOffset=76, SecBufLen=78
     local -i sec_off sec_len
-    endian::read_le16 "${msg}" 68 sec_off
-    endian::read_le16 "${msg}" 70 sec_len
+    endian::read_le16 "${msg}" 76 sec_off
+    endian::read_le16 "${msg}" 78 sec_len
 
     local spnego_blob ntlm
     hex::slice "${msg}" "${sec_off}" "${sec_len}" spnego_blob
@@ -322,30 +327,28 @@ ensh::import protocol/ntlm/authenticate
 ensh::import server/smb/ntlm
 
 # Lire un message NBT+SMB2 depuis stdin (binaire)
+# dd bs=1 count=N : lecture sequentielle exacte sans sur-buffering.
+# od -v : desactive la compression "*" des lignes identiques (sinon le hex
+#         est tronque silencieusement pour les donnees repetitives).
 _read_smb() {
     local nbt
-    nbt=$(od -An -tx1 -N4 2>/dev/null | tr -d ' \n' | tr 'a-f' 'A-F')
+    nbt=$(dd bs=1 count=4 2>/dev/null | od -An -tx1 -v | tr -d ' \n' | tr 'a-f' 'A-F')
     [[ ${#nbt} -eq 8 ]] || return 1
     local -i n=$(( 16#${nbt:2:6} ))
     [[ $n -gt 0 && $n -lt 1048576 ]] || return 1
     local body
-    body=$(od -An -tx1 -N"${n}" 2>/dev/null | tr -d ' \n' | tr 'a-f' 'A-F')
+    body=$(dd bs=1 count="${n}" 2>/dev/null | od -An -tx1 -v | tr -d ' \n' | tr 'a-f' 'A-F')
     [[ ${#body} -eq $(( n * 2 )) ]] || return 1
     printf '%s' "${body}"
 }
 
 # Ecrire un message NBT+SMB2 vers stdout (binaire)
+# Tout passer par xxd -r -p pour eviter le \x%02x invalide en printf.
 _write_smb() {
     local hex="${1^^}"
     local -i plen=$(( ${#hex} / 2 ))
-    printf '\x00\x%02x\x%02x\x%02x' \
-        $(( (plen >> 16) & 0xFF )) \
-        $(( (plen >> 8) & 0xFF )) \
-        $(( plen & 0xFF ))
-    local -i i
-    for (( i=0; i<${#hex}; i+=2 )); do
-        printf '\x'"${hex:${i}:2}"
-    done
+    local nbt_hex; printf -v nbt_hex '00%06X' "${plen}"
+    printf '%s' "${nbt_hex}${hex}" | xxd -r -p
 }
 
 # -- Etape 1 : NEGOTIATE -------------------------------------------------------
