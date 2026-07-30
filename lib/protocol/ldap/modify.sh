@@ -5,14 +5,14 @@
 # Implémente la modification d'attributs LDAP (RFC 4511 §4.6).
 #
 
-[[ -n "${_ENSH_PROTO_LDAP_MODIFY:-}" ]] && return 0
-readonly _ENSH_PROTO_LDAP_MODIFY=1
+[[ -n "${_BK_PROTO_LDAP_MODIFY:-}" ]] && return 0
+readonly _BK_PROTO_LDAP_MODIFY=1
 
-ensh::import core/hex
-ensh::import core/log
-ensh::import encoding/asn1
-ensh::import encoding/utf16
-ensh::import protocol/ldap/message
+bk::import core/hex
+bk::import core/log
+bk::import encoding/asn1
+bk::import encoding/utf16
+bk::import protocol/ldap/message
 
 readonly LDAP_MOD_ADD=0
 readonly LDAP_MOD_DELETE=1

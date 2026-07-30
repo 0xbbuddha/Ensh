@@ -14,11 +14,11 @@
 #
 # ─────────────────────────────────────────────────────────────────────────────
 
-[[ -n "${_ENSH_ENCODING_ASN1:-}" ]] && return 0
-readonly _ENSH_ENCODING_ASN1=1
+[[ -n "${_BK_ENCODING_ASN1:-}" ]] && return 0
+readonly _BK_ENCODING_ASN1=1
 
-ensh::import core/hex
-ensh::import core/bytes
+bk::import core/hex
+bk::import core/bytes
 
 # ── Tags universels ───────────────────────────────────────────────────────────
 

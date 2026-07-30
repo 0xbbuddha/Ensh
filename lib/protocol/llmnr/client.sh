@@ -10,12 +10,12 @@
 #
 # ─────────────────────────────────────────────────────────────────────────────
 
-[[ -n "${_ENSH_PROTO_LLMNR_CLIENT:-}" ]] && return 0
-readonly _ENSH_PROTO_LLMNR_CLIENT=1
+[[ -n "${_BK_PROTO_LLMNR_CLIENT:-}" ]] && return 0
+readonly _BK_PROTO_LLMNR_CLIENT=1
 
-ensh::import core/log
-ensh::import transport/udp
-ensh::import protocol/llmnr/message
+bk::import core/log
+bk::import transport/udp
+bk::import protocol/llmnr/message
 
 # ── Helpers binaire ──────────────────────────────────────────────────────────
 
@@ -93,9 +93,9 @@ llmnr::client::query() {
     local iface="${3:-}"
     local qtype="${4:-A}"
 
-    local server_ip="${ENSH_LLMNR_SERVER_IP:-${LLMNR_MCAST_V4}}"
-    local -i port="${ENSH_LLMNR_PORT:-${LLMNR_PORT}}"
-    local -i timeout="${ENSH_LLMNR_TIMEOUT:-2}"
+    local server_ip="${BK_LLMNR_SERVER_IP:-${LLMNR_MCAST_V4}}"
+    local -i port="${BK_LLMNR_PORT:-${LLMNR_PORT}}"
+    local -i timeout="${BK_LLMNR_TIMEOUT:-2}"
 
     local txid req resp
     llmnr::client::_random_txid txid || {

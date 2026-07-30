@@ -6,12 +6,12 @@
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "${SCRIPT_DIR}/../ensh.sh"
+source "${SCRIPT_DIR}/../bashket.sh"
 
-ensh::import protocol/smb/session
-ensh::import protocol/smb/smb2/create
-ensh::import protocol/smb/smb2/query_directory
-ensh::import protocol/smb/smb2/close
+bk::import protocol/smb/session
+bk::import protocol/smb/smb2/create
+bk::import protocol/smb/smb2/query_directory
+bk::import protocol/smb/smb2/close
 
 PORT=445
 TIMEOUT=10
@@ -59,7 +59,7 @@ _normalize_remote_path() {
 
 _banner() {
     printf '\n%s\n' "════════════════════════════════════════════════"
-    printf  ' Ensh — SMB2 / Listing de répertoire\n'
+    printf  ' Bashket — SMB2 / Listing de répertoire\n'
     printf  '%s\n' "════════════════════════════════════════════════"
     printf  '  Cible    : %s:%s\n' "${HOST}" "${PORT}"
     printf  '  Domaine  : %s\n' "${DOMAIN}"

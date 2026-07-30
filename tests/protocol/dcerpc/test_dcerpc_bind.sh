@@ -3,7 +3,7 @@
 # tests/protocol/dcerpc/test_dcerpc_bind.sh — Tests DCE/RPC BIND_ACK
 #
 
-ensh::import protocol/dcerpc/bind
+bk::import protocol/dcerpc/bind
 
 test::dcerpc_bind_parse_ack_accept() {
     local ack_hex="05000C03100000003800000001000000"

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# examples/smb_enum_shares.sh — Énumération de partages SMB via Ensh
+# examples/smb_enum_shares.sh — Énumération de partages SMB via Bashket
 #
 # Détecte les partages réels du serveur via SRVSVC / NetrShareEnum (DCE/RPC),
 # sans liste prédéfinie. Fonctionne sur SMB2 uniquement.
@@ -21,10 +21,10 @@
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "${SCRIPT_DIR}/../ensh.sh"
+source "${SCRIPT_DIR}/../bashket.sh"
 
-ensh::import protocol/smb/session
-ensh::import protocol/msrpc/srvsvc
+bk::import protocol/smb/session
+bk::import protocol/msrpc/srvsvc
 
 # ── Parsing des arguments ─────────────────────────────────────────────────────
 
@@ -60,7 +60,7 @@ fi
 
 _banner() {
     printf '\n%s\n' "════════════════════════════════════════════════"
-    printf  ' Ensh — Énumération SMB / Partages réseaux\n'
+    printf  ' Bashket — Énumération SMB / Partages réseaux\n'
     printf  '%s\n' "════════════════════════════════════════════════"
     printf  '  Cible   : %s:%s\n' "${HOST}" "${PORT}"
     printf  '  Domaine : %s\n'    "${DOMAIN}"

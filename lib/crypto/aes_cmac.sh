@@ -9,10 +9,10 @@
 #
 # ─────────────────────────────────────────────────────────────────────────────
 
-[[ -n "${_ENSH_CRYPTO_AES_CMAC:-}" ]] && return 0
-readonly _ENSH_CRYPTO_AES_CMAC=1
+[[ -n "${_BK_CRYPTO_AES_CMAC:-}" ]] && return 0
+readonly _BK_CRYPTO_AES_CMAC=1
 
-ensh::import core/log
+bk::import core/log
 
 # aes_cmac::compute <key_hex> <data_hex> <var_out>
 #

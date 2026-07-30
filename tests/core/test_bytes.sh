@@ -3,7 +3,7 @@
 # tests/core/test_bytes.sh — Tests unitaires pour lib/core/bytes.sh
 #
 
-ensh::import core/bytes
+bk::import core/bytes
 
 test::bytes_new() {
     local buf

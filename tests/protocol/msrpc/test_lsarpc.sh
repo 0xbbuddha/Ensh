@@ -3,7 +3,7 @@
 # tests/protocol/msrpc/test_lsarpc.sh -- Tests LSARPC / NDR
 #
 
-ensh::import protocol/msrpc/lsarpc
+bk::import protocol/msrpc/lsarpc
 
 test::lsarpc_build_open_policy_stub() {
     local stub

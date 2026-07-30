@@ -3,7 +3,7 @@
 # tests/encoding/test_utf16.sh — Tests unitaires pour lib/encoding/utf16.sh
 #
 
-ensh::import encoding/utf16
+bk::import encoding/utf16
 
 test::utf16_encode_le() {
     local out

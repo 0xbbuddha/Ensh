@@ -3,7 +3,7 @@
 # tests/protocol/ldap/test_ldap_modify.sh — Tests ModifyRequest / ModifyResponse
 #
 
-ensh::import protocol/ldap/modify
+bk::import protocol/ldap/modify
 
 test::ldap_modify_build_replace_request() {
     local msg

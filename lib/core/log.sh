@@ -6,13 +6,13 @@
 #   ERROR WARN INFO DEBUG TRACE
 #
 # Configuration :
-#   ENSH_LOG_LEVEL  — Niveau minimum affiché (défaut : INFO)
-#   ENSH_LOG_COLOR  — Désactiver les couleurs si "0" (défaut : 1)
+#   BK_LOG_LEVEL  — Niveau minimum affiché (défaut : INFO)
+#   BK_LOG_COLOR  — Désactiver les couleurs si "0" (défaut : 1)
 #
 # ─────────────────────────────────────────────────────────────────────────────
 
-[[ -n "${_ENSH_CORE_LOG:-}" ]] && return 0
-readonly _ENSH_CORE_LOG=1
+[[ -n "${_BK_CORE_LOG:-}" ]] && return 0
+readonly _BK_CORE_LOG=1
 
 # ── Niveaux et leurs priorités numériques ─────────────────────────────────────
 declare -grA _LOG_PRIORITY=(
@@ -42,8 +42,8 @@ declare -grA _LOG_LABEL=(
 )
 
 # Niveau actif (modifiable par l'utilisateur)
-ENSH_LOG_LEVEL="${ENSH_LOG_LEVEL:-INFO}"
-ENSH_LOG_COLOR="${ENSH_LOG_COLOR:-1}"
+BK_LOG_LEVEL="${BK_LOG_LEVEL:-INFO}"
+BK_LOG_COLOR="${BK_LOG_COLOR:-1}"
 
 # ── Fonction centrale ─────────────────────────────────────────────────────────
 #
@@ -58,14 +58,14 @@ _log::write() {
 
     # Comparer la priorité du niveau demandé avec le niveau actif
     local prio_msg="${_LOG_PRIORITY[${level}]:-2}"
-    local prio_cur="${_LOG_PRIORITY[${ENSH_LOG_LEVEL}]:-2}"
+    local prio_cur="${_LOG_PRIORITY[${BK_LOG_LEVEL}]:-2}"
     (( prio_msg < prio_cur )) && return 0
 
     local timestamp
     timestamp="$(date '+%H:%M:%S')"
     local label="${_LOG_LABEL[${level}]:-???}"
 
-    if [[ "${ENSH_LOG_COLOR}" != "0" ]] && [[ -t 2 ]]; then
+    if [[ "${BK_LOG_COLOR}" != "0" ]] && [[ -t 2 ]]; then
         local color="${_LOG_COLOR[${level}]:-}"
         printf "${color}[%s][%s] %s${_LOG_COLOR_RESET}\n" \
             "${timestamp}" "${label}" "${message}" >&2

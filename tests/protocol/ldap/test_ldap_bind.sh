@@ -3,8 +3,8 @@
 # tests/protocol/ldap/test_ldap_bind.sh — Tests du BindRequest LDAP
 #
 
-ensh::import protocol/ldap/bind
-ensh::import protocol/ldap/message
+bk::import protocol/ldap/bind
+bk::import protocol/ldap/message
 
 test::ldap_bind_simple_tag() {
     local req

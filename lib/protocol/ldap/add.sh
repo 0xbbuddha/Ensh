@@ -5,13 +5,13 @@
 # Implémente l'ajout d'objets LDAP (RFC 4511 §4.7).
 #
 
-[[ -n "${_ENSH_PROTO_LDAP_ADD:-}" ]] && return 0
-readonly _ENSH_PROTO_LDAP_ADD=1
+[[ -n "${_BK_PROTO_LDAP_ADD:-}" ]] && return 0
+readonly _BK_PROTO_LDAP_ADD=1
 
-ensh::import core/hex
-ensh::import core/log
-ensh::import encoding/asn1
-ensh::import protocol/ldap/message
+bk::import core/hex
+bk::import core/log
+bk::import encoding/asn1
+bk::import protocol/ldap/message
 
 # ldap::add::attrs_put <attrs_dict_var> <attr> [value...]
 #

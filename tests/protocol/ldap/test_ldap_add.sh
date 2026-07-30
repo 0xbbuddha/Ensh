@@ -3,7 +3,7 @@
 # tests/protocol/ldap/test_ldap_add.sh — Tests AddRequest / AddResponse
 #
 
-ensh::import protocol/ldap/add
+bk::import protocol/ldap/add
 
 test::ldap_add_build_request() {
     declare -A attrs=()

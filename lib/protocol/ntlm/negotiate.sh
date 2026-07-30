@@ -20,13 +20,13 @@
 #
 # ─────────────────────────────────────────────────────────────────────────────
 
-[[ -n "${_ENSH_PROTO_NTLM_NEGOTIATE:-}" ]] && return 0
-readonly _ENSH_PROTO_NTLM_NEGOTIATE=1
+[[ -n "${_BK_PROTO_NTLM_NEGOTIATE:-}" ]] && return 0
+readonly _BK_PROTO_NTLM_NEGOTIATE=1
 
-ensh::import core/hex
-ensh::import core/bytes
-ensh::import core/endian
-ensh::import protocol/ntlm/flags
+bk::import core/hex
+bk::import core/bytes
+bk::import core/endian
+bk::import protocol/ntlm/flags
 
 # Signature obligatoire de tout message NTLM
 readonly NTLM_SIGNATURE="4E544C4D535350000"   # "NTLMSSP\0" (attention : 8 octets = 16 nibbles)

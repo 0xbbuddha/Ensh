@@ -16,11 +16,11 @@
 #
 # ─────────────────────────────────────────────────────────────────────────────
 
-[[ -n "${_ENSH_CRYPTO_MD4:-}" ]] && return 0
-readonly _ENSH_CRYPTO_MD4=1
+[[ -n "${_BK_CRYPTO_MD4:-}" ]] && return 0
+readonly _BK_CRYPTO_MD4=1
 
-ensh::import core/hex
-ensh::import core/endian
+bk::import core/hex
+bk::import core/endian
 
 # ── Opérations 32 bits avec masque ───────────────────────────────────────────
 

@@ -11,14 +11,14 @@
 # Références : RFC 1001/1002, impacket.nmb
 #
 
-[[ -n "${_ENSH_PROTO_NBNS:-}" ]] && return 0
-readonly _ENSH_PROTO_NBNS=1
+[[ -n "${_BK_PROTO_NBNS:-}" ]] && return 0
+readonly _BK_PROTO_NBNS=1
 
-ensh::import core/endian
-ensh::import core/hex
-ensh::import core/log
-ensh::import transport/udp
-ensh::import protocol/netbios/nbt
+bk::import core/endian
+bk::import core/hex
+bk::import core/log
+bk::import transport/udp
+bk::import protocol/netbios/nbt
 
 readonly NBNS_PORT=137
 readonly NBNS_BCAST_V4="255.255.255.255"
@@ -452,12 +452,12 @@ nbns::_client_send_recv_socat() {
 nbns::client::query() {
     local -n _nbns_cq_out="$1"
     local name="$2"
-    local server_ip="${3:-${ENSH_NBNS_SERVER_IP:-${NBNS_BCAST_V4}}}"
+    local server_ip="${3:-${BK_NBNS_SERVER_IP:-${NBNS_BCAST_V4}}}"
 
-    local iface="${ENSH_NBNS_IFACE:-}"
-    local -i port="${ENSH_NBNS_PORT:-${NBNS_PORT}}"
-    local -i timeout="${ENSH_NBNS_TIMEOUT:-2}"
-    local suffix_hex="${ENSH_NBNS_SUFFIX_HEX:-20}"
+    local iface="${BK_NBNS_IFACE:-}"
+    local -i port="${BK_NBNS_PORT:-${NBNS_PORT}}"
+    local -i timeout="${BK_NBNS_TIMEOUT:-2}"
+    local suffix_hex="${BK_NBNS_SUFFIX_HEX:-20}"
 
     local txid req resp
     nbns::_random_txid txid || {
@@ -510,15 +510,15 @@ nbns::server::start() {
         return 1
     fi
 
-    local bind_ip="${ENSH_NBNS_BIND_IP:-0.0.0.0}"
-    local -i port="${ENSH_NBNS_PORT:-${NBNS_PORT}}"
-    local -i ttl="${ENSH_NBNS_TTL:-${NBNS_DEFAULT_TTL}}"
+    local bind_ip="${BK_NBNS_BIND_IP:-0.0.0.0}"
+    local -i port="${BK_NBNS_PORT:-${NBNS_PORT}}"
+    local -i ttl="${BK_NBNS_TTL:-${NBNS_DEFAULT_TTL}}"
 
     local attacker_hex
     _nbns_ipv4_to_hex "${attacker_ip}" attacker_hex
 
-    local _ensh_root
-    _ensh_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+    local _bk_root
+    _bk_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 
     local handler
     handler="$(mktemp /tmp/.nbns_handler_XXXXXX.sh)"
@@ -532,8 +532,8 @@ set -uo pipefail
 _hex=\$(od -An -tx1 | tr -d ' \n' | tr '[:lower:]' '[:upper:]')
 [[ -n "\${_hex}" ]] || exit 0
 
-source "${_ensh_root}/ensh.sh"
-ensh::import protocol/netbios/nbns
+source "${_bk_root}/bashket.sh"
+bk::import protocol/netbios/nbns
 
 declare -A _q
 nbns::parse "\${_hex}" _q || exit 0

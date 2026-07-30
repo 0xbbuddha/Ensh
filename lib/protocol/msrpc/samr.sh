@@ -35,15 +35,15 @@
 #
 # ─────────────────────────────────────────────────────────────────────────────
 
-[[ -n "${_ENSH_MSRPC_SAMR:-}" ]] && return 0
-readonly _ENSH_MSRPC_SAMR=1
+[[ -n "${_BK_MSRPC_SAMR:-}" ]] && return 0
+readonly _BK_MSRPC_SAMR=1
 
-ensh::import core/endian
-ensh::import core/log
-ensh::import encoding/utf16
-ensh::import protocol/dcerpc/bind
-ensh::import protocol/dcerpc/request
-ensh::import protocol/smb/smb2/header
+bk::import core/endian
+bk::import core/log
+bk::import encoding/utf16
+bk::import protocol/dcerpc/bind
+bk::import protocol/dcerpc/request
+bk::import protocol/smb/smb2/header
 
 # ── Constantes SAMR ──────────────────────────────────────────────────────────
 

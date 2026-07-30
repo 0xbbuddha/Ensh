@@ -29,13 +29,13 @@
 #
 # ─────────────────────────────────────────────────────────────────────────────
 
-[[ -n "${_ENSH_PROTO_LDAP_BIND:-}" ]] && return 0
-readonly _ENSH_PROTO_LDAP_BIND=1
+[[ -n "${_BK_PROTO_LDAP_BIND:-}" ]] && return 0
+readonly _BK_PROTO_LDAP_BIND=1
 
-ensh::import core/hex
-ensh::import core/log
-ensh::import encoding/asn1
-ensh::import protocol/ldap/message
+bk::import core/hex
+bk::import core/log
+bk::import encoding/asn1
+bk::import protocol/ldap/message
 
 # ── BindRequest ───────────────────────────────────────────────────────────────
 

@@ -3,9 +3,9 @@
 # tests/protocol/ldap/test_ldap_search.sh — Tests pour ldap/search.sh
 #
 
-ensh::import protocol/ldap/search
-ensh::import protocol/ldap/filter
-ensh::import protocol/ldap/message
+bk::import protocol/ldap/search
+bk::import protocol/ldap/filter
+bk::import protocol/ldap/message
 
 # ── SearchRequest ─────────────────────────────────────────────────────────────
 

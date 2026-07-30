@@ -3,7 +3,7 @@
 # tests/protocol/ldap/test_ldap_message.sh — Tests LDAPMessage
 #
 
-ensh::import protocol/ldap/message
+bk::import protocol/ldap/message
 
 test::ldap_message_wrap_simple() {
     # Construire un faux protocolOp (0x60 = BindRequest tag, contenu vide)

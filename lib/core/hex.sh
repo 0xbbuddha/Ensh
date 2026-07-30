@@ -2,7 +2,7 @@
 #
 # lib/core/hex.sh — Manipulation de chaînes hexadécimales
 #
-# Convention Ensh : toutes les données binaires circulent sous forme de
+# Convention Bashket : toutes les données binaires circulent sous forme de
 # chaînes hexadécimales en majuscules, sans séparateur ni préfixe "0x".
 # Exemple : "DEADBEEF", "0041004200"
 #
@@ -10,8 +10,8 @@
 #
 # ─────────────────────────────────────────────────────────────────────────────
 
-[[ -n "${_ENSH_CORE_HEX:-}" ]] && return 0
-readonly _ENSH_CORE_HEX=1
+[[ -n "${_BK_CORE_HEX:-}" ]] && return 0
+readonly _BK_CORE_HEX=1
 
 # ── Validation ────────────────────────────────────────────────────────────────
 

@@ -9,12 +9,12 @@
 #   - parser les questions et réponses principales
 #
 
-[[ -n "${_ENSH_PROTO_LLMNR_MESSAGE:-}" ]] && return 0
-readonly _ENSH_PROTO_LLMNR_MESSAGE=1
+[[ -n "${_BK_PROTO_LLMNR_MESSAGE:-}" ]] && return 0
+readonly _BK_PROTO_LLMNR_MESSAGE=1
 
-ensh::import core/endian
-ensh::import core/hex
-ensh::import core/log
+bk::import core/endian
+bk::import core/hex
+bk::import core/log
 
 readonly LLMNR_PORT=5355
 readonly LLMNR_MCAST_V4="224.0.0.252"

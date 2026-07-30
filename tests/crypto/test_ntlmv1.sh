@@ -11,7 +11,7 @@
 # Référence : MS-NLMP §3.3.1
 #
 
-ensh::import crypto/ntlmv1
+bk::import crypto/ntlmv1
 
 readonly _NTV1_NT_HASH="A4F49C406510BDCAB6824EE7C30FD852"
 readonly _NTV1_CHALLENGE="0102030405060708"

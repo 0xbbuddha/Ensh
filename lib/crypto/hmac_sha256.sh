@@ -9,10 +9,10 @@
 #
 # ─────────────────────────────────────────────────────────────────────────────
 
-[[ -n "${_ENSH_CRYPTO_HMAC_SHA256:-}" ]] && return 0
-readonly _ENSH_CRYPTO_HMAC_SHA256=1
+[[ -n "${_BK_CRYPTO_HMAC_SHA256:-}" ]] && return 0
+readonly _BK_CRYPTO_HMAC_SHA256=1
 
-ensh::import core/log
+bk::import core/log
 
 # hmac_sha256::compute <key_hex> <data_hex> <var_out>
 #

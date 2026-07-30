@@ -6,7 +6,7 @@
 # impacket, kinit, et les outils Kerberos standard.
 #
 # Cas d'usage :
-#   - Charger un TGT impacket pour l'utiliser dans Ensh
+#   - Charger un TGT impacket pour l'utiliser dans Bashket
 #   - Sauvegarder un ticket obtenu pour pass-the-ticket
 #   - Exporter en base64 pour transmission
 #
@@ -24,13 +24,13 @@
 #
 # ─────────────────────────────────────────────────────────────────────────────
 
-[[ -n "${_ENSH_KRB_CCACHE:-}" ]] && return 0
-readonly _ENSH_KRB_CCACHE=1
+[[ -n "${_BK_KRB_CCACHE:-}" ]] && return 0
+readonly _BK_KRB_CCACHE=1
 
-ensh::import core/endian
-ensh::import core/log
-ensh::import core/hex
-ensh::import encoding/base64
+bk::import core/endian
+bk::import core/log
+bk::import core/hex
+bk::import encoding/base64
 
 # ── Constantes ────────────────────────────────────────────────────────────────
 

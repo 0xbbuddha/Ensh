@@ -12,10 +12,10 @@
 #
 # ─────────────────────────────────────────────────────────────────────────────
 
-[[ -n "${_ENSH_CORE_ENDIAN:-}" ]] && return 0
-readonly _ENSH_CORE_ENDIAN=1
+[[ -n "${_BK_CORE_ENDIAN:-}" ]] && return 0
+readonly _BK_CORE_ENDIAN=1
 
-ensh::import core/hex
+bk::import core/hex
 
 # ── Big-endian ────────────────────────────────────────────────────────────────
 

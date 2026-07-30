@@ -3,10 +3,10 @@
 # tests/protocol/smb/test_smb2_file_ops.sh -- Tests SMB2 CREATE / READ / CLOSE
 #
 
-ensh::import protocol/smb/smb2/create
-ensh::import protocol/smb/smb2/read
-ensh::import protocol/smb/smb2/write
-ensh::import protocol/smb/smb2/close
+bk::import protocol/smb/smb2/create
+bk::import protocol/smb/smb2/read
+bk::import protocol/smb/smb2/write
+bk::import protocol/smb/smb2/close
 
 test::smb2_create_build_request() {
     local req

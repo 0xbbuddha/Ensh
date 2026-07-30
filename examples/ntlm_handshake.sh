@@ -5,21 +5,21 @@
 # Simule un échange NTLM complet (Negotiate → Challenge → Authenticate)
 # sans connexion réseau réelle, pour illustrer l'utilisation de la bibliothèque.
 #
-# Usage : source ensh.sh && bash examples/ntlm_handshake.sh
+# Usage : source bashket.sh && bash examples/ntlm_handshake.sh
 #
 # ─────────────────────────────────────────────────────────────────────────────
 
-ENSH_LOG_LEVEL="DEBUG"
-source "$(dirname "${BASH_SOURCE[0]}")/../ensh.sh"
+BK_LOG_LEVEL="DEBUG"
+source "$(dirname "${BASH_SOURCE[0]}")/../bashket.sh"
 
-ensh::import protocol/ntlm/negotiate
-ensh::import protocol/ntlm/challenge
-ensh::import protocol/ntlm/authenticate
-ensh::import protocol/ntlm/flags
-ensh::import crypto/nt_hash
+bk::import protocol/ntlm/negotiate
+bk::import protocol/ntlm/challenge
+bk::import protocol/ntlm/authenticate
+bk::import protocol/ntlm/flags
+bk::import crypto/nt_hash
 
 echo "════════════════════════════════════"
-echo " Ensh — Exemple d'échange NTLM"
+echo " Bashket — Exemple d'échange NTLM"
 echo "════════════════════════════════════"
 echo
 

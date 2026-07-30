@@ -3,7 +3,7 @@
 # tests/protocol/netbios/test_nbns.sh — Tests NBNS wire format
 #
 
-ensh::import protocol/netbios/nbns
+bk::import protocol/netbios/nbns
 
 test::nbns_build_query_nb() {
     local msg

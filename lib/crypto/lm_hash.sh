@@ -20,11 +20,11 @@
 #
 # ─────────────────────────────────────────────────────────────────────────────
 
-[[ -n "${_ENSH_CRYPTO_LM_HASH:-}" ]] && return 0
-readonly _ENSH_CRYPTO_LM_HASH=1
+[[ -n "${_BK_CRYPTO_LM_HASH:-}" ]] && return 0
+readonly _BK_CRYPTO_LM_HASH=1
 
-ensh::import core/hex
-ensh::import core/log
+bk::import core/hex
+bk::import core/log
 
 # La constante magique chiffrée par les deux moitiés de clé
 readonly _LM_MAGIC="4B47532140232425"   # "KGS!@#$%"

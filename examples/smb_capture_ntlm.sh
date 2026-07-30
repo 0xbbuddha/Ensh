@@ -24,9 +24,9 @@
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "${SCRIPT_DIR}/../ensh.sh"
+source "${SCRIPT_DIR}/../bashket.sh"
 
-ensh::import server/smb/ntlm
+bk::import server/smb/ntlm
 
 # ── Arguments ─────────────────────────────────────────────────────────────────
 

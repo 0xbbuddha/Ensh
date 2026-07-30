@@ -5,7 +5,7 @@
 # Vecteurs de test issus de la RFC 1320 §A.5.
 #
 
-ensh::import crypto/md4
+bk::import crypto/md4
 
 test::md4_empty_string() {
     local out

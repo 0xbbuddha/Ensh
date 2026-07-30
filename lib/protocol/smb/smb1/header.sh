@@ -25,12 +25,12 @@
 #
 # ─────────────────────────────────────────────────────────────────────────────
 
-[[ -n "${_ENSH_SMB1_HEADER:-}" ]] && return 0
-readonly _ENSH_SMB1_HEADER=1
+[[ -n "${_BK_SMB1_HEADER:-}" ]] && return 0
+readonly _BK_SMB1_HEADER=1
 
-ensh::import core/hex
-ensh::import core/endian
-ensh::import core/log
+bk::import core/hex
+bk::import core/endian
+bk::import core/log
 
 # ── Codes de commandes SMB1 ───────────────────────────────────────────────────
 

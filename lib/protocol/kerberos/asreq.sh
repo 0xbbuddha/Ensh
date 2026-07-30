@@ -8,12 +8,12 @@
 #   - parser un KRB-ERROR pour identifier un PREAUTH_REQUIRED, etc.
 #
 
-[[ -n "${_ENSH_PROTO_KERBEROS_ASREQ:-}" ]] && return 0
-readonly _ENSH_PROTO_KERBEROS_ASREQ=1
+[[ -n "${_BK_PROTO_KERBEROS_ASREQ:-}" ]] && return 0
+readonly _BK_PROTO_KERBEROS_ASREQ=1
 
-ensh::import core/hex
-ensh::import core/log
-ensh::import encoding/asn1
+bk::import core/hex
+bk::import core/log
+bk::import encoding/asn1
 
 readonly KERBEROS_MSGTYPE_AS_REQ=10
 readonly KERBEROS_MSGTYPE_AS_REP=11

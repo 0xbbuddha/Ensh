@@ -27,19 +27,19 @@
 #
 # ─────────────────────────────────────────────────────────────────────────────
 
-[[ -n "${_ENSH_PROTO_NTLM_AUTHENTICATE:-}" ]] && return 0
-readonly _ENSH_PROTO_NTLM_AUTHENTICATE=1
+[[ -n "${_BK_PROTO_NTLM_AUTHENTICATE:-}" ]] && return 0
+readonly _BK_PROTO_NTLM_AUTHENTICATE=1
 
-ensh::import core/hex
-ensh::import core/bytes
-ensh::import core/endian
-ensh::import core/log
-ensh::import crypto/nt_hash
-ensh::import crypto/hmac_md5
-ensh::import crypto/rc4
-ensh::import encoding/utf16
-ensh::import protocol/ntlm/challenge
-ensh::import protocol/ntlm/flags
+bk::import core/hex
+bk::import core/bytes
+bk::import core/endian
+bk::import core/log
+bk::import crypto/nt_hash
+bk::import crypto/hmac_md5
+bk::import crypto/rc4
+bk::import encoding/utf16
+bk::import protocol/ntlm/challenge
+bk::import protocol/ntlm/flags
 
 readonly _NTLM_AUTH_SIG="4E544C4D53535000"
 

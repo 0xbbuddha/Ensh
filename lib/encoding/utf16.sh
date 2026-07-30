@@ -12,10 +12,10 @@
 #
 # ─────────────────────────────────────────────────────────────────────────────
 
-[[ -n "${_ENSH_ENCODING_UTF16:-}" ]] && return 0
-readonly _ENSH_ENCODING_UTF16=1
+[[ -n "${_BK_ENCODING_UTF16:-}" ]] && return 0
+readonly _BK_ENCODING_UTF16=1
 
-ensh::import core/hex
+bk::import core/hex
 
 # ── Encodage ──────────────────────────────────────────────────────────────────
 

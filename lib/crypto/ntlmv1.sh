@@ -16,12 +16,12 @@
 #
 # ─────────────────────────────────────────────────────────────────────────────
 
-[[ -n "${_ENSH_CRYPTO_NTLMV1:-}" ]] && return 0
-readonly _ENSH_CRYPTO_NTLMV1=1
+[[ -n "${_BK_CRYPTO_NTLMV1:-}" ]] && return 0
+readonly _BK_CRYPTO_NTLMV1=1
 
-ensh::import core/log
-ensh::import crypto/nt_hash
-ensh::import crypto/lm_hash
+bk::import core/log
+bk::import crypto/nt_hash
+bk::import crypto/lm_hash
 
 # ── Helpers internes ─────────────────────────────────────────────────────────
 

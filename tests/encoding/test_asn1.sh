@@ -3,7 +3,7 @@
 # tests/encoding/test_asn1.sh — Tests unitaires pour lib/encoding/asn1.sh
 #
 
-ensh::import encoding/asn1
+bk::import encoding/asn1
 
 test::asn1_encode_length() {
     local out

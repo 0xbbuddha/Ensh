@@ -16,13 +16,13 @@
 #
 # ─────────────────────────────────────────────────────────────────────────────
 
-[[ -n "${_ENSH_SMB3_SIGNING:-}" ]] && return 0
-readonly _ENSH_SMB3_SIGNING=1
+[[ -n "${_BK_SMB3_SIGNING:-}" ]] && return 0
+readonly _BK_SMB3_SIGNING=1
 
-ensh::import core/endian
-ensh::import core/log
-ensh::import crypto/hmac_sha256
-ensh::import crypto/aes_cmac
+bk::import core/endian
+bk::import core/log
+bk::import crypto/hmac_sha256
+bk::import crypto/aes_cmac
 
 readonly _SMB3_KDF_LABEL_AESCMAC="534D4232414553434D414300"      # "SMB2AESCMAC\0"
 readonly _SMB3_KDF_CONTEXT_SMBSIGN="536D625369676E00"             # "SmbSign\0"

@@ -3,7 +3,7 @@
 # tests/protocol/msrpc/test_samr.sh — Tests SAMR / NDR
 #
 
-ensh::import protocol/msrpc/samr
+bk::import protocol/msrpc/samr
 
 test::samr_encode_ustr_ptr_lookup_domain() {
     local hdr def

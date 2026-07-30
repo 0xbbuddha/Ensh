@@ -5,7 +5,7 @@
 # Vecteurs issus de MS-NLMP §4.2.2.1.1 et divers outils de référence.
 #
 
-ensh::import crypto/lm_hash
+bk::import crypto/lm_hash
 
 # DES-ECB est désactivé dans OpenSSL 3.0+ (mode legacy).
 # On détecte sa disponibilité avant d'exécuter les tests qui en dépendent.

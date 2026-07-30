@@ -3,7 +3,7 @@
 # tests/protocol/llmnr/test_llmnr_message.sh — Tests LLMNR wire format
 #
 
-ensh::import protocol/llmnr/message
+bk::import protocol/llmnr/message
 
 test::llmnr_message_build_query_a() {
     local msg

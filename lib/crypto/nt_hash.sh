@@ -14,11 +14,11 @@
 #
 # ─────────────────────────────────────────────────────────────────────────────
 
-[[ -n "${_ENSH_CRYPTO_NT_HASH:-}" ]] && return 0
-readonly _ENSH_CRYPTO_NT_HASH=1
+[[ -n "${_BK_CRYPTO_NT_HASH:-}" ]] && return 0
+readonly _BK_CRYPTO_NT_HASH=1
 
-ensh::import crypto/md4
-ensh::import encoding/utf16
+bk::import crypto/md4
+bk::import encoding/utf16
 
 # nt_hash::from_password <password_string> <var_out>
 #

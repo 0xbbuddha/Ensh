@@ -3,8 +3,8 @@
 # tests/protocol/smb/test_smb2_query_directory.sh -- Tests SMB2 QUERY_DIRECTORY
 #
 
-ensh::import encoding/utf16
-ensh::import protocol/smb/smb2/query_directory
+bk::import encoding/utf16
+bk::import protocol/smb/smb2/query_directory
 
 _test::smb2_qd_entry() {
     local name="$1"

@@ -36,12 +36,12 @@
 #
 # ─────────────────────────────────────────────────────────────────────────────
 
-[[ -n "${_ENSH_DCERPC_REQUEST:-}" ]] && return 0
-readonly _ENSH_DCERPC_REQUEST=1
+[[ -n "${_BK_DCERPC_REQUEST:-}" ]] && return 0
+readonly _BK_DCERPC_REQUEST=1
 
-ensh::import core/endian
-ensh::import core/log
-ensh::import protocol/dcerpc/bind
+bk::import core/endian
+bk::import core/log
+bk::import protocol/dcerpc/bind
 
 # ── Construction ──────────────────────────────────────────────────────────────
 

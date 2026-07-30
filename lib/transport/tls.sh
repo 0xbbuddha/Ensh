@@ -23,11 +23,11 @@
 #
 # ─────────────────────────────────────────────────────────────────────────────
 
-[[ -n "${_ENSH_TRANSPORT_TLS:-}" ]] && return 0
-readonly _ENSH_TRANSPORT_TLS=1
+[[ -n "${_BK_TRANSPORT_TLS:-}" ]] && return 0
+readonly _BK_TRANSPORT_TLS=1
 
-ensh::import core/log
-ensh::import core/hex
+bk::import core/log
+bk::import core/hex
 
 # ── Registre des connexions TLS ───────────────────────────────────────────────
 #
@@ -64,8 +64,8 @@ tls::connect() {
     # ── Mise en place des FIFOs ───────────────────────────────────────────────
     # Nom distinct de toute variable du caller (évite le conflit de nameref)
     local _tls_key="${host}:${port}:$$:${RANDOM}"
-    local fifo_in="/tmp/_ensh_tls_in_${RANDOM}"
-    local fifo_out="/tmp/_ensh_tls_out_${RANDOM}"
+    local fifo_in="/tmp/_bk_tls_in_${RANDOM}"
+    local fifo_out="/tmp/_bk_tls_out_${RANDOM}"
 
     if ! mkfifo "${fifo_in}" "${fifo_out}" 2>/dev/null; then
         log::error "tls::connect : impossible de créer les FIFOs dans /tmp"

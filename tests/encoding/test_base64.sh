@@ -3,7 +3,7 @@
 # tests/encoding/test_base64.sh — Tests unitaires pour lib/encoding/base64.sh
 #
 
-ensh::import encoding/base64
+bk::import encoding/base64
 
 test::base64_encode_hex() {
     local out

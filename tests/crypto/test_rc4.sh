@@ -5,7 +5,7 @@
 # Vecteurs de test issus de RFC 4757 et sources publiques.
 #
 
-ensh::import crypto/rc4
+bk::import crypto/rc4
 
 test::rc4_symmetry() {
     local enc dec

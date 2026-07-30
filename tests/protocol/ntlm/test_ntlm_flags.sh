@@ -3,7 +3,7 @@
 # tests/protocol/ntlm/test_ntlm_flags.sh — Tests pour lib/protocol/ntlm/flags.sh
 #
 
-ensh::import protocol/ntlm/flags
+bk::import protocol/ntlm/flags
 
 test::ntlm_flags_to_le32() {
     local out

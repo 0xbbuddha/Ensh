@@ -3,8 +3,8 @@
 # tests/protocol/test_ntlm_negotiate.sh — Tests du message NTLM Negotiate
 #
 
-ensh::import protocol/ntlm/negotiate
-ensh::import protocol/ntlm/flags
+bk::import protocol/ntlm/negotiate
+bk::import protocol/ntlm/flags
 
 test::ntlm_negotiate_signature() {
     local msg

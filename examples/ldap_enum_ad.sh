@@ -14,12 +14,12 @@
 #
 # ─────────────────────────────────────────────────────────────────────────────
 
-ENSH_LOG_LEVEL="${ENSH_LOG_LEVEL:-WARN}"
-source "$(dirname "${BASH_SOURCE[0]}")/../ensh.sh"
+BK_LOG_LEVEL="${BK_LOG_LEVEL:-WARN}"
+source "$(dirname "${BASH_SOURCE[0]}")/../bashket.sh"
 
-ensh::import protocol/ldap/session
-ensh::import protocol/ldap/filter
-ensh::import protocol/ldap/search
+bk::import protocol/ldap/session
+bk::import protocol/ldap/filter
+bk::import protocol/ldap/search
 
 # ── Parsing des arguments ─────────────────────────────────────────────────────
 
@@ -67,7 +67,7 @@ _item()   { printf '  %-30s' "$1"; shift; printf ' %s' "$@"; printf '\n'; }
 # ── Connexion & authentification ──────────────────────────────────────────────
 
 _banner "══════════════════════════════════════════════"
-_banner " Ensh — Énumération LDAP / Active Directory  "
+_banner " Bashket — Énumération LDAP / Active Directory  "
 _banner "══════════════════════════════════════════════"
 printf '  Cible   : %s\n' "${HOST}"
 printf '  Domaine : %s\n' "${DOMAIN}"

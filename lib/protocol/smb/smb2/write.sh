@@ -5,13 +5,13 @@
 # Écrit des données dans un FileId SMB2.
 #
 
-[[ -n "${_ENSH_SMB2_WRITE:-}" ]] && return 0
-readonly _ENSH_SMB2_WRITE=1
+[[ -n "${_BK_SMB2_WRITE:-}" ]] && return 0
+readonly _BK_SMB2_WRITE=1
 
-ensh::import core/endian
-ensh::import core/hex
-ensh::import core/log
-ensh::import protocol/smb/smb2/header
+bk::import core/endian
+bk::import core/hex
+bk::import core/log
+bk::import protocol/smb/smb2/header
 
 readonly SMB2_WRITE_DEFAULT_LEN=65536
 readonly SMB2_WRITEFLAG_NONE=0x00000000

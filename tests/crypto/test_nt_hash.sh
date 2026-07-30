@@ -6,7 +6,7 @@
 # (MS-NLMP documentation officielle, IMPacket test suite).
 #
 
-ensh::import crypto/nt_hash
+bk::import crypto/nt_hash
 
 # ── Vecteurs de test (MS-NLMP Appendix B) ────────────────────────────────────
 

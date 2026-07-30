@@ -12,11 +12,11 @@
 #
 # ─────────────────────────────────────────────────────────────────────────────
 
-[[ -n "${_ENSH_CRYPTO_HMAC_MD5:-}" ]] && return 0
-readonly _ENSH_CRYPTO_HMAC_MD5=1
+[[ -n "${_BK_CRYPTO_HMAC_MD5:-}" ]] && return 0
+readonly _BK_CRYPTO_HMAC_MD5=1
 
-ensh::import core/hex
-ensh::import core/bytes
+bk::import core/hex
+bk::import core/bytes
 
 readonly _HMAC_MD5_BLOCK_SIZE=64   # 512 bits
 

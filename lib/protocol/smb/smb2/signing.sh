@@ -11,12 +11,12 @@
 #
 # ─────────────────────────────────────────────────────────────────────────────
 
-[[ -n "${_ENSH_SMB2_SIGNING:-}" ]] && return 0
-readonly _ENSH_SMB2_SIGNING=1
+[[ -n "${_BK_SMB2_SIGNING:-}" ]] && return 0
+readonly _BK_SMB2_SIGNING=1
 
-ensh::import core/endian
-ensh::import core/log
-ensh::import crypto/hmac_sha256
+bk::import core/endian
+bk::import core/log
+bk::import crypto/hmac_sha256
 
 # smb2::signing::derive_key <var_out> <exported_session_key_hex> <dialect_int> [_ignored]
 #

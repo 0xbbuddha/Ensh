@@ -38,12 +38,12 @@
 #
 # ─────────────────────────────────────────────────────────────────────────────
 
-[[ -n "${_ENSH_SMB2_NEGOTIATE:-}" ]] && return 0
-readonly _ENSH_SMB2_NEGOTIATE=1
+[[ -n "${_BK_SMB2_NEGOTIATE:-}" ]] && return 0
+readonly _BK_SMB2_NEGOTIATE=1
 
-ensh::import core/endian
-ensh::import core/log
-ensh::import protocol/smb/smb2/header
+bk::import core/endian
+bk::import core/log
+bk::import protocol/smb/smb2/header
 
 # ── Capacités client par défaut ───────────────────────────────────────────────
 
@@ -58,7 +58,7 @@ readonly SMB2_CLIENT_CAPS=$(( SMB2_CAP_DFS | SMB2_CAP_LARGE_MTU ))
 # Par défaut : dialectes 2.0.2 et 2.1 seulement (signature HMAC-SHA256, pas AES-CMAC 3.x) —
 # meilleure interop avec les piles qui négocient 3.x tout en restant sensibles aux détails
 # de longueur / compound sur les réponses signées.
-# Pour proposer aussi 3.0 / 3.0.2 : ENSH_SMB_NEGOTIATE_SMB3=1
+# Pour proposer aussi 3.0 / 3.0.2 : BK_SMB_NEGOTIATE_SMB3=1
 smb2::negotiate::build_request() {
     local -n _smb2_neg_req_out="$1"
     local -i msg_id="${2:-0}"
@@ -73,7 +73,7 @@ smb2::negotiate::build_request() {
     # ── Dialectes ─────────────────────────────────────────────────────────────
     local _d dialects=""
     local -a _dialect_list=( "${SMB2_DIALECT_202}" "${SMB2_DIALECT_210}" )
-    if [[ "${ENSH_SMB_NEGOTIATE_SMB3:-}" == "1" ]]; then
+    if [[ "${BK_SMB_NEGOTIATE_SMB3:-}" == "1" ]]; then
         _dialect_list+=( "${SMB2_DIALECT_300}" "${SMB2_DIALECT_302}" )
     fi
     for _d in "${_dialect_list[@]}"; do

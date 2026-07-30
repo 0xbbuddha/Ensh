@@ -3,7 +3,7 @@
 # tests/protocol/kerberos/test_asreq.sh — Tests Kerberos AS-REQ / AS-REP
 #
 
-ensh::import protocol/kerberos/asreq
+bk::import protocol/kerberos/asreq
 
 test::kerberos_asreq_build_without_preauth() {
     local req

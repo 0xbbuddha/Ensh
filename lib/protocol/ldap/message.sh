@@ -36,13 +36,13 @@
 #
 # ─────────────────────────────────────────────────────────────────────────────
 
-[[ -n "${_ENSH_PROTO_LDAP_MESSAGE:-}" ]] && return 0
-readonly _ENSH_PROTO_LDAP_MESSAGE=1
+[[ -n "${_BK_PROTO_LDAP_MESSAGE:-}" ]] && return 0
+readonly _BK_PROTO_LDAP_MESSAGE=1
 
-ensh::import core/hex
-ensh::import core/bytes
-ensh::import core/endian
-ensh::import encoding/asn1
+bk::import core/hex
+bk::import core/bytes
+bk::import core/endian
+bk::import encoding/asn1
 
 # ── Tags applicatifs LDAP ─────────────────────────────────────────────────────
 #

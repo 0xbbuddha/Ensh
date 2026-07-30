@@ -2,7 +2,7 @@
 #
 # lib/protocol/ldap/session.sh — Session LDAP haut niveau
 #
-# Ce module expose l'API publique d'Ensh pour LDAP. Il orchestre les
+# Ce module expose l'API publique d'Bashket pour LDAP. Il orchestre les
 # modules inférieurs (transport, message, bind, search) pour offrir une
 # interface simple et cohérente.
 #
@@ -38,17 +38,17 @@
 #
 # ─────────────────────────────────────────────────────────────────────────────
 
-[[ -n "${_ENSH_PROTO_LDAP_SESSION:-}" ]] && return 0
-readonly _ENSH_PROTO_LDAP_SESSION=1
+[[ -n "${_BK_PROTO_LDAP_SESSION:-}" ]] && return 0
+readonly _BK_PROTO_LDAP_SESSION=1
 
-ensh::import core/log
-ensh::import transport/tcp
-ensh::import transport/tls
-ensh::import protocol/ldap/message
-ensh::import protocol/ldap/bind
-ensh::import protocol/ldap/search
-ensh::import protocol/ldap/modify
-ensh::import protocol/ldap/add
+bk::import core/log
+bk::import transport/tcp
+bk::import transport/tls
+bk::import protocol/ldap/message
+bk::import protocol/ldap/bind
+bk::import protocol/ldap/search
+bk::import protocol/ldap/modify
+bk::import protocol/ldap/add
 
 # ── Registre des sessions ─────────────────────────────────────────────────────
 #

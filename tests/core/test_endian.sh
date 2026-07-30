@@ -3,7 +3,7 @@
 # tests/core/test_endian.sh — Tests unitaires pour lib/core/endian.sh
 #
 
-ensh::import core/endian
+bk::import core/endian
 
 test::endian_le16() {
     local out

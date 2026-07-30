@@ -23,18 +23,18 @@
 #
 # ─────────────────────────────────────────────────────────────────────────────
 
-[[ -n "${_ENSH_SERVER_SMB_NTLM:-}" ]] && return 0
-readonly _ENSH_SERVER_SMB_NTLM=1
+[[ -n "${_BK_SERVER_SMB_NTLM:-}" ]] && return 0
+readonly _BK_SERVER_SMB_NTLM=1
 
-ensh::import core/endian
-ensh::import core/log
-ensh::import core/hex
-ensh::import encoding/utf16
-ensh::import protocol/smb/smb2/header
-ensh::import protocol/smb/spnego
-ensh::import protocol/ntlm/flags
-ensh::import protocol/ntlm/challenge
-ensh::import protocol/ntlm/authenticate
+bk::import core/endian
+bk::import core/log
+bk::import core/hex
+bk::import encoding/utf16
+bk::import protocol/smb/smb2/header
+bk::import protocol/smb/spnego
+bk::import protocol/ntlm/flags
+bk::import protocol/ntlm/challenge
+bk::import protocol/ntlm/authenticate
 
 # ── Constantes ────────────────────────────────────────────────────────────────
 
@@ -290,8 +290,8 @@ smb::server::start() {
         return 1
     fi
 
-    local ensh_root
-    ensh_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+    local bk_root
+    bk_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 
     local capture_log
     capture_log="$(mktemp /tmp/smb_capture_XXXXXX.log)"
@@ -305,7 +305,7 @@ smb::server::start() {
     cat > "${handler}" <<HEADER
 #!/usr/bin/env bash
 set -uo pipefail
-_ensh_root="${ensh_root}"
+_bk_root="${bk_root}"
 _challenge="${challenge}"
 _capture_log="${capture_log}"
 _callback_cmd="${callback_cmd}"
@@ -315,16 +315,16 @@ HEADER
     # Corps statique (pas d'expansion - tout est dans les variables ci-dessus)
     cat >> "${handler}" << 'BODY'
 
-source "${_ensh_root}/ensh.sh"
-ensh::import core/endian
-ensh::import core/hex
-ensh::import encoding/utf16
-ensh::import protocol/smb/smb2/header
-ensh::import protocol/smb/spnego
-ensh::import protocol/ntlm/flags
-ensh::import protocol/ntlm/challenge
-ensh::import protocol/ntlm/authenticate
-ensh::import server/smb/ntlm
+source "${_bk_root}/bashket.sh"
+bk::import core/endian
+bk::import core/hex
+bk::import encoding/utf16
+bk::import protocol/smb/smb2/header
+bk::import protocol/smb/spnego
+bk::import protocol/ntlm/flags
+bk::import protocol/ntlm/challenge
+bk::import protocol/ntlm/authenticate
+bk::import server/smb/ntlm
 
 # Lire un message NBT+SMB2 depuis stdin (binaire)
 # dd bs=1 count=N : lecture sequentielle exacte sans sur-buffering.

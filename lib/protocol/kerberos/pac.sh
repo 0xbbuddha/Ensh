@@ -19,13 +19,13 @@
 #
 # ─────────────────────────────────────────────────────────────────────────────
 
-[[ -n "${_ENSH_KRB_PAC:-}" ]] && return 0
-readonly _ENSH_KRB_PAC=1
+[[ -n "${_BK_KRB_PAC:-}" ]] && return 0
+readonly _BK_KRB_PAC=1
 
-ensh::import core/endian
-ensh::import core/log
-ensh::import core/hex
-ensh::import encoding/utf16
+bk::import core/endian
+bk::import core/log
+bk::import core/hex
+bk::import encoding/utf16
 
 # ── Constantes PAC ───────────────────────────────────────────────────────────
 

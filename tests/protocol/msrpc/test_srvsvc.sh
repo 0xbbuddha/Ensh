@@ -3,7 +3,7 @@
 # tests/protocol/msrpc/test_srvsvc.sh — Tests SRVSVC / NDR
 #
 
-ensh::import protocol/msrpc/srvsvc
+bk::import protocol/msrpc/srvsvc
 
 test::srvsvc_build_net_share_enum_stub() {
     local stub

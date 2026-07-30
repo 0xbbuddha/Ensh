@@ -5,12 +5,12 @@
 # Ferme un FileId SMB2.
 #
 
-[[ -n "${_ENSH_SMB2_CLOSE:-}" ]] && return 0
-readonly _ENSH_SMB2_CLOSE=1
+[[ -n "${_BK_SMB2_CLOSE:-}" ]] && return 0
+readonly _BK_SMB2_CLOSE=1
 
-ensh::import core/endian
-ensh::import core/log
-ensh::import protocol/smb/smb2/header
+bk::import core/endian
+bk::import core/log
+bk::import protocol/smb/smb2/header
 
 # smb2::close::build_request <var_out> <file_id_hex32> <msg_id> <session_id> <tree_id> [header_flags]
 smb2::close::build_request() {

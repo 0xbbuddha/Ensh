@@ -21,10 +21,10 @@
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "${SCRIPT_DIR}/../ensh.sh"
+source "${SCRIPT_DIR}/../bashket.sh"
 
-ensh::import protocol/smb/session
-ensh::import protocol/msrpc/samr
+bk::import protocol/smb/session
+bk::import protocol/msrpc/samr
 
 # ── Parsing des arguments ─────────────────────────────────────────────────────
 
@@ -57,7 +57,7 @@ fi
 
 _banner() {
     printf '\n%s\n' "════════════════════════════════════════════════"
-    printf  ' Ensh — Énumération SAMR / Utilisateurs domaine\n'
+    printf  ' Bashket — Énumération SAMR / Utilisateurs domaine\n'
     printf  '%s\n' "════════════════════════════════════════════════"
     printf  '  Cible   : %s:%s\n' "${HOST}" "${PORT}"
     printf  '  Domaine : %s\n'    "${DOMAIN}"

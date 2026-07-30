@@ -23,17 +23,17 @@
 #
 # ─────────────────────────────────────────────────────────────────────────────
 
-[[ -n "${_ENSH_SERVER_HTTP_NTLM:-}" ]] && return 0
-readonly _ENSH_SERVER_HTTP_NTLM=1
+[[ -n "${_BK_SERVER_HTTP_NTLM:-}" ]] && return 0
+readonly _BK_SERVER_HTTP_NTLM=1
 
-ensh::import core/endian
-ensh::import core/log
-ensh::import core/hex
-ensh::import encoding/base64
-ensh::import encoding/utf16
-ensh::import protocol/ntlm/flags
-ensh::import protocol/ntlm/challenge
-ensh::import protocol/ntlm/authenticate
+bk::import core/endian
+bk::import core/log
+bk::import core/hex
+bk::import encoding/base64
+bk::import encoding/utf16
+bk::import protocol/ntlm/flags
+bk::import protocol/ntlm/challenge
+bk::import protocol/ntlm/authenticate
 
 # ── Constantes ────────────────────────────────────────────────────────────────
 
@@ -147,8 +147,8 @@ http::server::start() {
         return 1
     fi
 
-    local ensh_root
-    ensh_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+    local bk_root
+    bk_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 
     local capture_log
     capture_log="$(mktemp /tmp/http_capture_XXXXXX.log)"
@@ -161,7 +161,7 @@ http::server::start() {
     cat > "${handler}" <<HEADER
 #!/usr/bin/env bash
 set -uo pipefail
-_ensh_root="${ensh_root}"
+_bk_root="${bk_root}"
 _challenge="${challenge}"
 _capture_log="${capture_log}"
 _callback_cmd="${callback_cmd}"
@@ -171,15 +171,15 @@ HEADER
 
     cat >> "${handler}" << 'BODY'
 
-source "${_ensh_root}/ensh.sh"
-ensh::import core/endian
-ensh::import core/hex
-ensh::import encoding/base64
-ensh::import encoding/utf16
-ensh::import protocol/ntlm/flags
-ensh::import protocol/ntlm/challenge
-ensh::import protocol/ntlm/authenticate
-ensh::import server/http/ntlm
+source "${_bk_root}/bashket.sh"
+bk::import core/endian
+bk::import core/hex
+bk::import encoding/base64
+bk::import encoding/utf16
+bk::import protocol/ntlm/flags
+bk::import protocol/ntlm/challenge
+bk::import protocol/ntlm/authenticate
+bk::import server/http/ntlm
 
 # Lire les headers HTTP d'une requete depuis stdin.
 # Variables de sortie globales : _method _path _auth_token _content_length

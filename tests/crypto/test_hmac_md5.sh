@@ -5,7 +5,7 @@
 # Vecteurs de test issus de la RFC 2202.
 #
 
-ensh::import crypto/hmac_md5
+bk::import crypto/hmac_md5
 
 # ── RFC 2202 Test Vectors ─────────────────────────────────────────────────────
 

@@ -5,14 +5,14 @@
 # Ouvre un fichier ou un répertoire sur un partage SMB2.
 #
 
-[[ -n "${_ENSH_SMB2_CREATE:-}" ]] && return 0
-readonly _ENSH_SMB2_CREATE=1
+[[ -n "${_BK_SMB2_CREATE:-}" ]] && return 0
+readonly _BK_SMB2_CREATE=1
 
-ensh::import core/endian
-ensh::import core/hex
-ensh::import core/log
-ensh::import encoding/utf16
-ensh::import protocol/smb/smb2/header
+bk::import core/endian
+bk::import core/hex
+bk::import core/log
+bk::import encoding/utf16
+bk::import protocol/smb/smb2/header
 
 # -- Constantes CREATE --------------------------------------------------------
 

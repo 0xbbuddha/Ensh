@@ -1,30 +1,30 @@
-# Ensh
+# Bashket
 
 > Implémentation de protocoles réseau Windows en Bash pur.
 
-Ensh est une bibliothèque modulaire qui apporte à Bash les capacités qu'[impacket](https://github.com/fortra/impacket) offre à Python : interagir avec les protocoles du monde Windows (SMB, NTLM, Kerberos, LDAP, NetBIOS…) sans quitter le shell.
+Bashket est une bibliothèque modulaire qui apporte à Bash les capacités qu'[impacket](https://github.com/fortra/impacket) offre à Python : interagir avec les protocoles du monde Windows (SMB, NTLM, Kerberos, LDAP, NetBIOS…) sans quitter le shell.
 
 Zéro dépendance compilée. Zéro binaire externe obligatoire. Du Bash, point.
 
 ---
 
-## Pourquoi Ensh ?
+## Pourquoi Bashket ?
 
-| | impacket (Python) | Manticore (Go) | **Ensh (Bash)** |
+| | impacket (Python) | Manticore (Go) | **Bashket (Bash)** |
 |---|---|---|---|
 | Langage | Python 3 | Go | Bash ≥ 5.0 |
 | Dépendances | pip | go modules | aucune |
 | Intégration shell | via subprocess | via subprocess | **native** |
 | Portabilité | partout avec Python | compilation requise | partout avec bash |
 
-Ensh n'est pas un portage d'impacket ni de Manticore. C'est une nouvelle approche, pensée pour le shell.
+Bashket n'est pas un portage d'impacket ni de Manticore. C'est une nouvelle approche, pensée pour le shell.
 
 ---
 
 ## Structure du projet
 
 ```
-ensh.sh              — Chargeur principal (point d'entrée)
+bashket.sh              — Chargeur principal (point d'entrée)
 lib/
   core/              — Fondations : import, log, bytes, hex, endianness
   crypto/            — Primitives : MD4, HMAC-MD5, RC4, NT/LM hash
@@ -49,10 +49,10 @@ docs/                — Références de protocoles et spécifications
 
 ```bash
 # Charger la bibliothèque complète
-source ensh.sh
+source bashket.sh
 
 # Ou importer uniquement ce dont on a besoin
-ensh::import protocol/ntlm
+bk::import protocol/ntlm
 
 # Créer un message Negotiate NTLM
 ntlm::negotiate::build my_msg
@@ -67,7 +67,7 @@ ntlm::negotiate::encode my_msg hex_output
 - Toutes les fonctions sont namespaced : `module::sous_module::fonction`
 - Les données binaires circulent en hexadécimal (`DEADBEEF`, sans `0x`)
 - L'endianness est explicite : `core::endian::le16`, `core::endian::be32`
-- Chaque module déclare ses dépendances en tête de fichier via `ensh::import`
+- Chaque module déclare ses dépendances en tête de fichier via `bk::import`
 - Les tests sont co-localisés dans `tests/` et suivent la même hiérarchie
 
 ---

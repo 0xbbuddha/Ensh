@@ -3,7 +3,7 @@
 # tests/protocol/ldap/test_ldap_filter.sh — Tests des filtres LDAP
 #
 
-ensh::import protocol/ldap/filter
+bk::import protocol/ldap/filter
 
 test::ldap_filter_equal_structure() {
     local filt

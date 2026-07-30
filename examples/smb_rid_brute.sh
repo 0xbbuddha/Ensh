@@ -21,10 +21,10 @@
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "${SCRIPT_DIR}/../ensh.sh"
+source "${SCRIPT_DIR}/../bashket.sh"
 
-ensh::import protocol/smb/session
-ensh::import protocol/msrpc/lsarpc
+bk::import protocol/smb/session
+bk::import protocol/msrpc/lsarpc
 
 PORT=445
 TIMEOUT=10
@@ -67,7 +67,7 @@ fi
 
 _banner() {
     printf '\n%s\n' "════════════════════════════════════════════════"
-    printf  ' Ensh — RID Brute SMB / LSARPC\n'
+    printf  ' Bashket — RID Brute SMB / LSARPC\n'
     printf  '%s\n' "════════════════════════════════════════════════"
     printf  '  Cible    : %s:%s\n' "${HOST}" "${PORT}"
     printf  '  Domaine  : %s\n' "${DOMAIN}"

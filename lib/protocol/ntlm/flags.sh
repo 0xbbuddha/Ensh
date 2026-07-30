@@ -13,10 +13,10 @@
 #
 # ─────────────────────────────────────────────────────────────────────────────
 
-[[ -n "${_ENSH_PROTO_NTLM_FLAGS:-}" ]] && return 0
-readonly _ENSH_PROTO_NTLM_FLAGS=1
+[[ -n "${_BK_PROTO_NTLM_FLAGS:-}" ]] && return 0
+readonly _BK_PROTO_NTLM_FLAGS=1
 
-ensh::import core/endian
+bk::import core/endian
 
 # ── Constantes de flags (valeurs entières, masques de bits) ──────────────────
 

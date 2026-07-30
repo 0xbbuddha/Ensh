@@ -8,16 +8,16 @@
 #     en Kerberoast
 #
 
-[[ -n "${_ENSH_PROTO_KERBEROS_TGSREQ:-}" ]] && return 0
-readonly _ENSH_PROTO_KERBEROS_TGSREQ=1
+[[ -n "${_BK_PROTO_KERBEROS_TGSREQ:-}" ]] && return 0
+readonly _BK_PROTO_KERBEROS_TGSREQ=1
 
-ensh::import core/endian
-ensh::import core/hex
-ensh::import core/log
-ensh::import encoding/asn1
-ensh::import crypto/hmac_md5
-ensh::import crypto/rc4
-ensh::import protocol/kerberos/asreq
+bk::import core/endian
+bk::import core/hex
+bk::import core/log
+bk::import encoding/asn1
+bk::import crypto/hmac_md5
+bk::import crypto/rc4
+bk::import protocol/kerberos/asreq
 
 readonly KERBEROS_MSGTYPE_TGS_REQ=12
 readonly KERBEROS_MSGTYPE_TGS_REP=13
@@ -226,13 +226,13 @@ kerberos::tgsreq::_build_ap_req() {
     local client_cname="$4"
     local session_key_hex="${5^^}"
 
-    local ctime="${ENSH_KRB5_TGSREQ_CTIME:-}"
+    local ctime="${BK_KRB5_TGSREQ_CTIME:-}"
     [[ -z "${ctime}" ]] && kerberos::tgsreq::_utc_now ctime
 
-    local cusec="${ENSH_KRB5_TGSREQ_CUSEC:-}"
+    local cusec="${BK_KRB5_TGSREQ_CUSEC:-}"
     [[ -z "${cusec}" ]] && kerberos::tgsreq::_current_cusec cusec
 
-    local confounder_hex="${ENSH_KRB5_TGSREQ_CONFOUNDER_HEX:-}"
+    local confounder_hex="${BK_KRB5_TGSREQ_CONFOUNDER_HEX:-}"
     [[ -z "${confounder_hex}" ]] && kerberos::tgsreq::_random_hex 8 confounder_hex
     confounder_hex="${confounder_hex^^}"
 
@@ -331,10 +331,10 @@ kerberos::tgsreq::build() {
     asn1::sequence "${padata_seq}" padata_list
     asn1::context_tag 3 "${padata_list}" padata_field
 
-    local till="${ENSH_KRB5_TGSREQ_TILL:-}"
+    local till="${BK_KRB5_TGSREQ_TILL:-}"
     [[ -z "${till}" ]] && kerberos::tgsreq::_utc_plus_one_day till
 
-    local nonce_hex="${ENSH_KRB5_TGSREQ_NONCE_HEX:-}"
+    local nonce_hex="${BK_KRB5_TGSREQ_NONCE_HEX:-}"
     [[ -z "${nonce_hex}" ]] && kerberos::tgsreq::_random_hex 4 nonce_hex
     nonce_hex="${nonce_hex^^}"
     if ! hex::is_valid "${nonce_hex}"; then

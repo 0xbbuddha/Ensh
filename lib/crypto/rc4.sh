@@ -12,10 +12,10 @@
 #
 # ─────────────────────────────────────────────────────────────────────────────
 
-[[ -n "${_ENSH_CRYPTO_RC4:-}" ]] && return 0
-readonly _ENSH_CRYPTO_RC4=1
+[[ -n "${_BK_CRYPTO_RC4:-}" ]] && return 0
+readonly _BK_CRYPTO_RC4=1
 
-ensh::import core/hex
+bk::import core/hex
 
 # ── Implémentation Bash pure ──────────────────────────────────────────────────
 

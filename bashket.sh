@@ -1,37 +1,37 @@
 #!/usr/bin/env bash
 #
-# ensh.sh — Chargeur principal de la bibliothèque Ensh
+# bashket.sh — Chargeur principal de la bibliothèque Bashket
 #
 # Usage :
-#   source /path/to/ensh.sh             # Charge uniquement le core
-#   source /path/to/ensh.sh --all       # Charge tous les modules
-#   source /path/to/ensh.sh --ldap      # Charge la pile LDAP
-#   source /path/to/ensh.sh --smb       # Charge la pile SMB/MSRPC
+#   source /path/to/bashket.sh             # Charge uniquement le core
+#   source /path/to/bashket.sh --all       # Charge tous les modules
+#   source /path/to/bashket.sh --ldap      # Charge la pile LDAP
+#   source /path/to/bashket.sh --smb       # Charge la pile SMB/MSRPC
 #
 # Une fois chargé, on peut importer des modules à la demande :
-#   ensh::import crypto/nt_hash
-#   ensh::import protocol/ntlm
+#   bk::import crypto/nt_hash
+#   bk::import protocol/ntlm
 #
 # ─────────────────────────────────────────────────────────────────────────────
 
 # Protection contre le double-chargement
-[[ -n "${_ENSH_LOADED:-}" ]] && return 0
-readonly _ENSH_LOADED=1
+[[ -n "${_BK_LOADED:-}" ]] && return 0
+readonly _BK_LOADED=1
 
 # Résolution du chemin racine de la bibliothèque, même si l'on est sourcé
 # depuis un répertoire différent. On ne redéclare pas si déjà défini (ex: par run_tests.sh).
-if [[ -z "${ENSH_ROOT:-}" ]]; then
-    ENSH_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-    readonly ENSH_ROOT
+if [[ -z "${BK_ROOT:-}" ]]; then
+    BK_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    readonly BK_ROOT
 fi
-readonly ENSH_LIB="${ENSH_ROOT}/lib"
+readonly BK_LIB="${BK_ROOT}/lib"
 
 # Version courante
-readonly ENSH_VERSION="0.1.0"
+readonly BK_VERSION="0.1.0"
 
 # Bash 5.0 minimum requis (pour les tableaux associatifs améliorés, etc.)
 if (( BASH_VERSINFO[0] < 5 )); then
-    printf '[ensh] ERREUR : Bash >= 5.0 requis (actuel : %s)\n' "${BASH_VERSION}" >&2
+    printf '[bashket] ERREUR : Bash >= 5.0 requis (actuel : %s)\n' "${BASH_VERSION}" >&2
     return 1
 fi
 
@@ -39,40 +39,40 @@ fi
 #
 # Clé   : chemin relatif du module (ex: "core/hex")
 # Valeur: 1 si chargé
-declare -gA _ENSH_MODULES=()
+declare -gA _BK_MODULES=()
 
 # ── Fonction d'import ────────────────────────────────────────────────────────
 #
-# ensh::import <module> [module...]
+# bk::import <module> [module...]
 #
 # Charge un ou plusieurs modules par leur chemin relatif depuis lib/.
 # Les imports redondants sont silencieusement ignorés (idempotent).
 #
 # Exemples :
-#   ensh::import core/hex
-#   ensh::import crypto/nt_hash protocol/ntlm
+#   bk::import core/hex
+#   bk::import crypto/nt_hash protocol/ntlm
 #
-ensh::import() {
+bk::import() {
     local module
     for module in "$@"; do
         # Déjà chargé ? On passe.
-        [[ -n "${_ENSH_MODULES[${module}]:-}" ]] && continue
+        [[ -n "${_BK_MODULES[${module}]:-}" ]] && continue
 
-        local path="${ENSH_LIB}/${module}.sh"
+        local path="${BK_LIB}/${module}.sh"
         if [[ ! -f "${path}" ]]; then
-            printf '[ensh] ERREUR : module introuvable : %s\n' "${module}" >&2
+            printf '[bashket] ERREUR : module introuvable : %s\n' "${module}" >&2
             return 1
         fi
 
         # Marquer avant le source pour éviter les cycles
-        _ENSH_MODULES["${module}"]=1
+        _BK_MODULES["${module}"]=1
         # shellcheck source=/dev/null
         source "${path}"
     done
 }
 
 # ── Chargement du core (toujours effectué) ────────────────────────────────────
-ensh::import \
+bk::import \
     core/log   \
     core/hex   \
     core/bytes \
@@ -80,8 +80,8 @@ ensh::import \
 
 # ── Presets de chargement ────────────────────────────────────────────────────
 
-ensh::preset::ldap() {
-    ensh::import \
+bk::preset::ldap() {
+    bk::import \
         protocol/ldap/message           \
         protocol/ldap/bind              \
         protocol/ldap/filter            \
@@ -91,8 +91,8 @@ ensh::preset::ldap() {
         protocol/ldap/session
 }
 
-ensh::preset::smb() {
-    ensh::import \
+bk::preset::smb() {
+    bk::import \
         protocol/netbios/nbt            \
         protocol/netbios/nbns           \
         protocol/ntlm/flags             \
@@ -124,8 +124,8 @@ ensh::preset::smb() {
         protocol/msrpc/lsarpc
 }
 
-ensh::preset::all() {
-    ensh::import \
+bk::preset::all() {
+    bk::import \
         encoding/utf16          \
         encoding/base64         \
         encoding/asn1           \
@@ -147,20 +147,20 @@ ensh::preset::all() {
         protocol/kerberos/asreq \
         protocol/kerberos/tgsreq
 
-    ensh::preset::ldap
-    ensh::preset::smb
+    bk::preset::ldap
+    bk::preset::smb
 }
 
 # ── Chargement des presets demandés ──────────────────────────────────────────
 
 case "${1:-}" in
     --all)
-        ensh::preset::all
+        bk::preset::all
         ;;
     --ldap)
-        ensh::preset::ldap
+        bk::preset::ldap
         ;;
     --smb)
-        ensh::preset::smb
+        bk::preset::smb
         ;;
 esac

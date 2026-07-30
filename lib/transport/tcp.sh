@@ -19,11 +19,11 @@
 #
 # ─────────────────────────────────────────────────────────────────────────────
 
-[[ -n "${_ENSH_TRANSPORT_TCP:-}" ]] && return 0
-readonly _ENSH_TRANSPORT_TCP=1
+[[ -n "${_BK_TRANSPORT_TCP:-}" ]] && return 0
+readonly _BK_TRANSPORT_TCP=1
 
-ensh::import core/log
-ensh::import core/hex
+bk::import core/log
+bk::import core/hex
 
 # ── Registre des connexions ouvertes ──────────────────────────────────────────
 #

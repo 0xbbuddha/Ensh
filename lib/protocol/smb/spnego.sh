@@ -31,11 +31,11 @@
 #
 # ─────────────────────────────────────────────────────────────────────────────
 
-[[ -n "${_ENSH_SMB_SPNEGO:-}" ]] && return 0
-readonly _ENSH_SMB_SPNEGO=1
+[[ -n "${_BK_SMB_SPNEGO:-}" ]] && return 0
+readonly _BK_SMB_SPNEGO=1
 
-ensh::import core/log
-ensh::import encoding/asn1
+bk::import core/log
+bk::import encoding/asn1
 
 # ── OIDs en DER (précalculés) ─────────────────────────────────────────────────
 

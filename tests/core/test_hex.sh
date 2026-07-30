@@ -3,7 +3,7 @@
 # tests/core/test_hex.sh — Tests unitaires pour lib/core/hex.sh
 #
 
-ensh::import core/hex
+bk::import core/hex
 
 test::hex_from_string() {
     local out

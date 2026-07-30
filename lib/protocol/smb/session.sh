@@ -34,28 +34,28 @@
 #
 # ─────────────────────────────────────────────────────────────────────────────
 
-[[ -n "${_ENSH_SMB_SESSION:-}" ]] && return 0
-readonly _ENSH_SMB_SESSION=1
+[[ -n "${_BK_SMB_SESSION:-}" ]] && return 0
+readonly _BK_SMB_SESSION=1
 
-ensh::import core/log
-ensh::import encoding/utf16
-ensh::import transport/tcp
-ensh::import crypto/nt_hash
-ensh::import protocol/ntlm/negotiate
-ensh::import protocol/ntlm/challenge
-ensh::import protocol/ntlm/authenticate
-ensh::import protocol/smb/spnego
-ensh::import protocol/smb/smb1/header
-ensh::import protocol/smb/smb1/negotiate
-ensh::import protocol/smb/smb1/session_setup
-ensh::import protocol/smb/smb1/tree_connect
-ensh::import protocol/smb/smb2/header
-ensh::import protocol/smb/smb2/negotiate
-ensh::import protocol/smb/smb2/session_setup
-ensh::import protocol/smb/smb2/tree_connect
-ensh::import protocol/smb/smb2/ioctl
-ensh::import protocol/smb/smb2/signing
-ensh::import protocol/smb/smb3/signing
+bk::import core/log
+bk::import encoding/utf16
+bk::import transport/tcp
+bk::import crypto/nt_hash
+bk::import protocol/ntlm/negotiate
+bk::import protocol/ntlm/challenge
+bk::import protocol/ntlm/authenticate
+bk::import protocol/smb/spnego
+bk::import protocol/smb/smb1/header
+bk::import protocol/smb/smb1/negotiate
+bk::import protocol/smb/smb1/session_setup
+bk::import protocol/smb/smb1/tree_connect
+bk::import protocol/smb/smb2/header
+bk::import protocol/smb/smb2/negotiate
+bk::import protocol/smb/smb2/session_setup
+bk::import protocol/smb/smb2/tree_connect
+bk::import protocol/smb/smb2/ioctl
+bk::import protocol/smb/smb2/signing
+bk::import protocol/smb/smb3/signing
 
 # ── Registre de sessions ──────────────────────────────────────────────────────
 
@@ -80,11 +80,11 @@ declare -gA _SMB_SECURITY_MODE=()    # security_mode SMB2 négocié
 
 # SMB2_FLAGS_DFS_OPERATIONS est lié au partage/chemin ciblé, pas à la simple
 # capacité globale du serveur. Le forcer sur IPC$ / named pipes casse certains
-# serveurs Windows. On garde donc ce drapeau désactivé par défaut tant qu'Ensh
+# serveurs Windows. On garde donc ce drapeau désactivé par défaut tant qu'Bashket
 # ne suit pas les capacités de partage par TreeId.
 smb::_smb2_dfs_hdr_flags() {
     local _sess="$1"
-    if [[ "${ENSH_SMB2_FORCE_DFS:-0}" == "1" ]]; then
+    if [[ "${BK_SMB2_FORCE_DFS:-0}" == "1" ]]; then
         printf '%u' "${SMB2_FLAGS_DFS_OPERATIONS}"
     else
         printf '0'
@@ -324,7 +324,7 @@ _smb2_login() {
     local -i _sign_required=0
     (( ${_SMB_SECURITY_MODE[${_sess}]:-0} & SMB2_SEC_SIGNING_REQUIRED )) && _sign_required=1
     ntlm::flags::type1_for_signing _t1_flags "${_sign_required}"
-    ntlm::negotiate::build _ntlm_neg "${_domain}" "ENSH" "${_t1_flags}"
+    ntlm::negotiate::build _ntlm_neg "${_domain}" "BASHKET" "${_t1_flags}"
     spnego::ntlm_init "${_ntlm_neg}" _spnego_init
 
     smb2::_next_msg_id "${_sess}" _msg_id1
@@ -395,7 +395,7 @@ _smb2_login() {
     log::debug "smb2::login : challenge flags=${_chall[flags]} → type3 flags=${_t3_flags}"
     local _exported_session_key=""
     ntlm::authenticate::build _ntlm_auth \
-        "${_user}" "${_domain}" "ENSH" \
+        "${_user}" "${_domain}" "BASHKET" \
         "${_nt_hash}" \
         "${_chall[server_challenge]}" \
         "${_chall[target_info]}" \
@@ -527,7 +527,7 @@ _smb1_login() {
 
     local _ntlm_neg _spnego_init _req1 _t1_flags_smb1
     ntlm::flags::type1_for_signing _t1_flags_smb1 1
-    ntlm::negotiate::build _ntlm_neg "${_domain}" "ENSH" "${_t1_flags_smb1}"
+    ntlm::negotiate::build _ntlm_neg "${_domain}" "BASHKET" "${_t1_flags_smb1}"
     spnego::ntlm_init "${_ntlm_neg}" _spnego_init
     smb1::session_setup::build_ntlm_init _req1 "${_spnego_init}" "${_pid}" "${_skey}"
 
@@ -560,7 +560,7 @@ _smb1_login() {
 
     local _ntlm_auth _spnego_auth _req2
     ntlm::authenticate::build _ntlm_auth \
-        "${_user}" "${_domain}" "ENSH" \
+        "${_user}" "${_domain}" "BASHKET" \
         "${_nt_hash}" \
         "${_chall[server_challenge]}" \
         "${_chall[target_info]}" \

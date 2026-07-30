@@ -22,15 +22,15 @@
 #
 # ─────────────────────────────────────────────────────────────────────────────
 
-[[ -n "${_ENSH_PROTO_NTLM_CHALLENGE:-}" ]] && return 0
-readonly _ENSH_PROTO_NTLM_CHALLENGE=1
+[[ -n "${_BK_PROTO_NTLM_CHALLENGE:-}" ]] && return 0
+readonly _BK_PROTO_NTLM_CHALLENGE=1
 
-ensh::import core/hex
-ensh::import core/bytes
-ensh::import core/endian
-ensh::import core/log
-ensh::import encoding/utf16
-ensh::import protocol/ntlm/flags
+bk::import core/hex
+bk::import core/bytes
+bk::import core/endian
+bk::import core/log
+bk::import encoding/utf16
+bk::import protocol/ntlm/flags
 
 # Signature NTLM (partagée avec negotiate.sh mais déclarée localement pour l'autonomie)
 readonly _NTLM_CHALLENGE_SIG="4E544C4D53535000"
@@ -199,7 +199,7 @@ ntlm::challenge::target_info_inject_cifs_spn() {
 
 # ntlm::challenge::build_target_info <var_out> [nb_domain] [nb_computer] [dns_domain] [dns_computer] [timestamp_hex]
 #
-# Construit un bloc TargetInfo (pour les serveurs Ensh ou les tests).
+# Construit un bloc TargetInfo (pour les serveurs Bashket ou les tests).
 ntlm::challenge::build_target_info() {
     local -n _ntlm_bti_out="$1"
     local nb_domain="${2:-}"

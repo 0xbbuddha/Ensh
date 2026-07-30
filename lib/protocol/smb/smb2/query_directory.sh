@@ -5,14 +5,14 @@
 # Énumère les entrées d'un répertoire ouvert via SMB2 CREATE.
 #
 
-[[ -n "${_ENSH_SMB2_QUERY_DIRECTORY:-}" ]] && return 0
-readonly _ENSH_SMB2_QUERY_DIRECTORY=1
+[[ -n "${_BK_SMB2_QUERY_DIRECTORY:-}" ]] && return 0
+readonly _BK_SMB2_QUERY_DIRECTORY=1
 
-ensh::import core/endian
-ensh::import core/hex
-ensh::import core/log
-ensh::import encoding/utf16
-ensh::import protocol/smb/smb2/header
+bk::import core/endian
+bk::import core/hex
+bk::import core/log
+bk::import encoding/utf16
+bk::import protocol/smb/smb2/header
 
 readonly SMB2_FILE_ID_FULL_DIRECTORY_INFORMATION=0x26
 

@@ -9,10 +9,10 @@
 #
 # ─────────────────────────────────────────────────────────────────────────────
 
-[[ -n "${_ENSH_ENCODING_BASE64:-}" ]] && return 0
-readonly _ENSH_ENCODING_BASE64=1
+[[ -n "${_BK_ENCODING_BASE64:-}" ]] && return 0
+readonly _BK_ENCODING_BASE64=1
 
-ensh::import core/hex
+bk::import core/hex
 
 readonly _B64_TABLE='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
 

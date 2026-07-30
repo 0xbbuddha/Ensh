@@ -6,8 +6,8 @@
 # sans dépendance réseau.
 #
 
-ensh::import protocol/ntlm/challenge
-ensh::import protocol/ntlm/flags
+bk::import protocol/ntlm/challenge
+bk::import protocol/ntlm/flags
 
 # ── Fabrication d'un Challenge de test ───────────────────────────────────────
 #

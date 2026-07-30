@@ -28,13 +28,13 @@
 #
 # ─────────────────────────────────────────────────────────────────────────────
 
-[[ -n "${_ENSH_SMB2_TREE_CONNECT:-}" ]] && return 0
-readonly _ENSH_SMB2_TREE_CONNECT=1
+[[ -n "${_BK_SMB2_TREE_CONNECT:-}" ]] && return 0
+readonly _BK_SMB2_TREE_CONNECT=1
 
-ensh::import core/endian
-ensh::import core/log
-ensh::import encoding/utf16
-ensh::import protocol/smb/smb2/header
+bk::import core/endian
+bk::import core/log
+bk::import encoding/utf16
+bk::import protocol/smb/smb2/header
 
 # Types de partage
 readonly SMB2_SHARE_TYPE_DISK=1

@@ -40,11 +40,11 @@
 #
 # ─────────────────────────────────────────────────────────────────────────────
 
-[[ -n "${_ENSH_DCERPC_BIND:-}" ]] && return 0
-readonly _ENSH_DCERPC_BIND=1
+[[ -n "${_BK_DCERPC_BIND:-}" ]] && return 0
+readonly _BK_DCERPC_BIND=1
 
-ensh::import core/endian
-ensh::import core/log
+bk::import core/endian
+bk::import core/log
 
 # ── Constantes DCE/RPC ────────────────────────────────────────────────────────
 

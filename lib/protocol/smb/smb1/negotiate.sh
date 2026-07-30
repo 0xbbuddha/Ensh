@@ -33,12 +33,12 @@
 #
 # ─────────────────────────────────────────────────────────────────────────────
 
-[[ -n "${_ENSH_SMB1_NEGOTIATE:-}" ]] && return 0
-readonly _ENSH_SMB1_NEGOTIATE=1
+[[ -n "${_BK_SMB1_NEGOTIATE:-}" ]] && return 0
+readonly _BK_SMB1_NEGOTIATE=1
 
-ensh::import core/endian
-ensh::import core/log
-ensh::import protocol/smb/smb1/header
+bk::import core/endian
+bk::import core/log
+bk::import protocol/smb/smb1/header
 
 # ── Construction de la requête ────────────────────────────────────────────────
 

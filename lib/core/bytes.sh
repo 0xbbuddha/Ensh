@@ -12,11 +12,11 @@
 #
 # ─────────────────────────────────────────────────────────────────────────────
 
-[[ -n "${_ENSH_CORE_BYTES:-}" ]] && return 0
-readonly _ENSH_CORE_BYTES=1
+[[ -n "${_BK_CORE_BYTES:-}" ]] && return 0
+readonly _BK_CORE_BYTES=1
 
-ensh::import core/hex
-ensh::import core/endian
+bk::import core/hex
+bk::import core/endian
 
 # ── Construction de buffers ───────────────────────────────────────────────────
 

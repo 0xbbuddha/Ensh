@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# tests/run_tests.sh — Lanceur de tests Ensh
+# tests/run_tests.sh — Lanceur de tests Bashket
 #
 # Usage :
 #   ./tests/run_tests.sh           # Tous les tests
@@ -19,9 +19,9 @@
 set -uo pipefail
 
 readonly TESTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-readonly ENSH_ROOT="$(dirname "${TESTS_DIR}")"
+readonly BK_ROOT="$(dirname "${TESTS_DIR}")"
 
-source "${ENSH_ROOT}/ensh.sh"
+source "${BK_ROOT}/bashket.sh"
 
 # ── Compteurs ─────────────────────────────────────────────────────────────────
 declare -gi _TEST_TOTAL=0
@@ -179,7 +179,7 @@ main() {
         exit 0
     fi
 
-    printf '\033[1mEnsh — Suite de tests\033[0m\n'
+    printf '\033[1mBashket — Suite de tests\033[0m\n'
     printf '════════════════════════════════════\n'
 
     for f in "${test_files[@]}"; do
